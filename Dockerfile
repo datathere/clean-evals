@@ -9,7 +9,7 @@ COPY web/ ./
 RUN npm run build
 
 # ---- Python build --------------------------------------------------------
-FROM python:3.12-slim AS pybuild
+FROM python:3.14-slim AS pybuild
 WORKDIR /app
 RUN pip install --no-cache-dir build hatchling
 COPY pyproject.toml README.md LICENSE BRANDING.md CHANGELOG.md ./
@@ -20,7 +20,7 @@ COPY --from=frontend /app/src/clean_evals/web/static ./src/clean_evals/web/stati
 RUN python -m build --wheel --outdir /wheels
 
 # ---- Runtime -------------------------------------------------------------
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 # Non-root user (security hygiene)
 RUN groupadd --system --gid 1000 cleanevals \
