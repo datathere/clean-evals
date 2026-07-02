@@ -76,6 +76,10 @@ clean-evals reads keys from environment variables. There is no
 | OpenAI       | `OPENAI_API_KEY`       |
 | Google       | `GOOGLE_API_KEY`       |
 | OpenRouter   | `OPENROUTER_API_KEY`   |
+| Local (OpenAI-compatible) | `CLEAN_EVALS_LOCAL_BASE_URL` (+ optional `CLEAN_EVALS_LOCAL_API_KEY`) |
+
+Local model ids use the `local/` prefix — see
+[Adapters: local models](concepts/adapters.md#local-models-ollama-lm-studio-llamacpp-vllm-).
 
 Profile support via `~/.config/clean-evals/config.toml` and a profile
 flag is planned (post-v0.4).

@@ -66,7 +66,7 @@ flowchart LR
     CLI[CLI: serve, run,<br/>worker, build] --> Q[Celery + Redis]
     Web[Web UI<br/>FastAPI + React] --> Q
     Q --> Workers[Async runner]
-    Workers --> Adapters[Anthropic, OpenAI,<br/>Google, OpenRouter]
+    Workers --> Adapters[Anthropic, OpenAI, Google,<br/>OpenRouter, local OpenAI-compatible]
     Workers --> DB[(MySQL or<br/>Postgres)]
     Workers --> Art[Artifact store<br/>local filesystem]
     Adapters --> Models([LLM providers])

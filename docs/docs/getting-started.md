@@ -36,6 +36,9 @@ export OPENAI_API_KEY=sk-...
 # (optional)
 export GOOGLE_API_KEY=...
 export OPENROUTER_API_KEY=...
+# (optional) local models via any OpenAI-compatible server; model ids
+# then use the local/ prefix, e.g. --models local/llama3.2
+export CLEAN_EVALS_LOCAL_BASE_URL=http://localhost:11434/v1
 ```
 
 clean-evals reads provider keys directly from environment variables. There
