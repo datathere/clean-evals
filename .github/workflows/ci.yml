@@ -52,7 +52,7 @@ jobs:
           CELERY_BROKER_URL: redis://localhost:6379/0
           CELERY_RESULT_BACKEND: redis://localhost:6379/0
         run: pytest -ra
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: coverage-${{ matrix.python }}
@@ -88,7 +88,7 @@ jobs:
       - run: npm run lint
       - run: npm test -- --run
       - run: npm run build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: frontend-dist
           path: src/clean_evals/web/static
@@ -117,7 +117,7 @@ jobs:
       - name: Verify wheel ships static assets
         run: |
           unzip -l dist/*.whl | grep -E "clean_evals/web/static/(index\.html|assets/)" || (echo "missing static assets in wheel" && exit 1)
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel
           path: dist/*.whl
