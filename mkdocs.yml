@@ -1,5 +1,5 @@
 site_name: clean-evals
-site_description: Measure AI quality across models. Decisions, not data.
+site_description: Try out your prompts and context across AI models. Run evals and find the best model for your use case.
 # Deploy target of .github/workflows/docs.yml (GitHub Pages for this repo).
 # Not live until the repo is public and Pages is enabled.
 site_url: https://datathere.github.io/clean-evals

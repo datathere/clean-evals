@@ -40,7 +40,7 @@ def _static_dir() -> Path:
 app = FastAPI(
     title="clean-evals",
     version=__version__,
-    description="Measure AI quality across models. Decisions, not data.",
+    description="Try out your prompts and context across AI models. Run evals and find the best model for your use case.",
     docs_url="/api/docs",
     redoc_url=None,
     openapi_url="/api/openapi.json",

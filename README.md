@@ -154,14 +154,14 @@ Read these before relying on clean-evals for anything that matters.
 
 ## Why clean-evals
 
-- **Decisions, not data.** Most eval tools produce JSON. clean-evals produces
-  three recommendations side by side — maximum accuracy, best
-  price/performance, lowest cost — with the comparison math in plain view.
+- **Runs end in a decision.** Every eval produces three recommendations side
+  by side — maximum accuracy, best price/performance, lowest cost — with the
+  comparison math in plain view.
 - **Dataset construction is the first-class flow.** Building a golden dataset
   is most of the real work of evaluation, and the tool is designed around it.
-- **No black boxes.** Readable source, plugin extension points, and dated
-  model snapshots only — no `-latest` aliases that obscure what was actually
-  measured.
+- **Everything is inspectable.** Readable source, plugin extension points,
+  and dated model snapshots, so every result traces back to the exact model
+  that produced it.
 - **Boring, typed Python.** `mypy --strict`, no `Any`, no magic. The source
   is meant to be read and trusted quickly.
 

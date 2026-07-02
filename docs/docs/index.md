@@ -53,8 +53,9 @@ fifteen minutes:
   with `status="error"` — runs never crash on a single bad call.
 - **Determinism by default.** With `temperature=0` + a seeded provider, the
   same dataset + same models produce byte-identical scored output.
-- **No black boxes.** Readable source, plugin extension points, dated
-  model snapshots only.
+- **Everything is inspectable.** Readable source, plugin extension points,
+  and dated model snapshots, so every result traces back to the exact
+  model that produced it.
 
 ## Architecture at a glance
 

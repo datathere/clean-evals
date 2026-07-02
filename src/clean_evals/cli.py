@@ -36,7 +36,7 @@ from clean_evals.models import Dataset, RunConfig
 
 app = typer.Typer(
     name="clean-evals",
-    help="Measure AI quality across models. Decisions, not data.",
+    help="Try out your prompts and context across AI models. Run evals and find the best model for your use case.",
     add_completion=False,
     no_args_is_help=True,
 )
