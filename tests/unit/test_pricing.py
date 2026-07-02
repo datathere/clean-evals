@@ -51,6 +51,10 @@ def test_infer_provider_known_prefixes() -> None:
     assert infer_provider("gemini-1.5-pro-002") == "google"
     assert infer_provider("local/llama3.2") == "local"
     assert infer_provider("local/qwen2.5-coder:14b") == "local"
+    # The whole o-series routes to OpenAI, matching capabilities' pattern.
+    assert infer_provider("o3") == "openai"
+    assert infer_provider("o3-mini-2025-01-31") == "openai"
+    assert infer_provider("o4-mini") == "openai"
 
 
 def test_infer_provider_unknown() -> None:

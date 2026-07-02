@@ -28,6 +28,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -85,11 +86,14 @@ _TABLE: dict[tuple[str, str], Price] = {
 _PROVIDER_PREFIXES: tuple[tuple[str, str], ...] = (
     ("claude-", "anthropic"),
     ("gpt-", "openai"),
-    ("o1", "openai"),
     ("gemini-", "google"),
     # OpenAI-compatible local endpoints (Ollama, LM Studio, vLLM, ...).
     ("local/", "local"),
 )
+
+# OpenAI's reasoning series (o1, o3, o4-mini, ...) shares no usable string
+# prefix; matched by pattern, mirroring capabilities._OPENAI_REASONING.
+_OPENAI_O_SERIES = re.compile(r"^o\d")
 
 # Which environment variable connects each provider. Used by the model
 # catalog endpoint so the UI can show real availability, and by docs.
@@ -116,6 +120,8 @@ def infer_provider(model: str) -> str:
     for prefix, provider in _PROVIDER_PREFIXES:
         if model.startswith(prefix):
             return provider
+    if _OPENAI_O_SERIES.match(model):
+        return "openai"
     raise ValueError(
         f"Cannot infer provider for model {model!r}. "
         "Pass an explicit adapter or extend pricing._PROVIDER_PREFIXES."
