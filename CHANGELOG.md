@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [0.1.1] - 2026-07-02
+
+### Added
+- Browser test suite (Playwright, Chromium): six tests drive the served
+  application, including dataset creation through the upload wizard. CI
+  runs them in a dedicated `e2e` job that gates the required
+  `build-wheel` check.
+
+### Changed
+- Frontend migrated to React 19 (react, react-dom, and both type
+  packages), with all Radix primitives updated to their
+  react-19-supporting releases. No source changes were required.
+- Dependency bumps: GitHub Actions majors (checkout v7, setup-python v6,
+  upload-artifact v7, upload-pages-artifact v5, deploy-pages v5),
+  eslint 10, typescript 6, @types/node 26, lucide-react 1.x. Docker base
+  images moved to python 3.14-slim and node 26-alpine, and Python 3.14
+  was added to the CI test matrix.
+- Documentation rewritten as plain technical prose; the project
+  description was updated across PyPI metadata, the web UI, and the CLI.
+
 ## [0.1.0] - 2026-07-02
 
 ### Security
@@ -81,5 +101,6 @@ Nothing yet.
 - GitHub Actions CI: lint, mypy --strict, pytest 3.11/3.12/3.13, examples,
   PyPI publish on tag, docs deploy on tag.
 
-[Unreleased]: https://github.com/datathere/clean-evals/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/datathere/clean-evals/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/datathere/clean-evals/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/datathere/clean-evals/releases/tag/v0.1.0

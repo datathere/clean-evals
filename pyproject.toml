@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "clean-evals"
-version = "0.1.0"
+version = "0.1.1"
 description = "Try out your prompts and context across AI models. Run evals and find the best model for your use case."
 readme = "README.md"
 license = { file = "LICENSE" }
