@@ -64,6 +64,11 @@ src/clean_evals/web/static/
 .parcel-cache/
 .cache/
 
+# Browser tests (Playwright)
+web/.e2e/
+web/test-results/
+web/playwright-report/
+
 # Project
 clean-evals-data/
 *.sqlite
