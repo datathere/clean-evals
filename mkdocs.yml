@@ -11,6 +11,8 @@ docs_dir: docs/docs
 
 theme:
   name: material
+  logo: assets/logo.svg
+  favicon: assets/favicon.svg
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default

@@ -5,10 +5,10 @@ import {
   Database,
   FileBarChart,
   HardDriveUpload,
-  LineChart,
   Moon,
   Sun,
 } from "lucide-react";
+import { Logo } from "@/components/Logo";
 import { cn } from "@/lib/utils";
 import { useThemeStore } from "@/lib/theme";
 
@@ -47,9 +47,7 @@ export function Layout({ children, currentRoute, navigate }: Props) {
             }}
             className="flex items-center gap-2 font-semibold tracking-tight"
           >
-            <span className="size-7 grid place-items-center rounded-md bg-primary text-primary-foreground">
-              <LineChart className="size-4" />
-            </span>
+            <Logo className="size-7" />
             <span>clean-evals</span>
           </a>
           <nav className="flex items-center gap-1 text-sm">
