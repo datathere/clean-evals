@@ -1,7 +1,7 @@
 # Multi-stage build: frontend bundle, then Python wheel, then runtime.
 
 # ---- Frontend build ------------------------------------------------------
-FROM node:20-alpine AS frontend
+FROM node:26-alpine AS frontend
 WORKDIR /app/web
 COPY web/package.json web/package-lock.json* ./
 RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
@@ -9,7 +9,7 @@ COPY web/ ./
 RUN npm run build
 
 # ---- Python build --------------------------------------------------------
-FROM python:3.12-slim AS pybuild
+FROM python:3.14-slim AS pybuild
 WORKDIR /app
 RUN pip install --no-cache-dir build hatchling
 COPY pyproject.toml README.md LICENSE BRANDING.md CHANGELOG.md ./
@@ -20,7 +20,7 @@ COPY --from=frontend /app/src/clean_evals/web/static ./src/clean_evals/web/stati
 RUN python -m build --wheel --outdir /wheels
 
 # ---- Runtime -------------------------------------------------------------
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 # Non-root user (security hygiene)
 RUN groupadd --system --gid 1000 cleanevals \
