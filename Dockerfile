@@ -1,7 +1,7 @@
 # Multi-stage build: frontend bundle, then Python wheel, then runtime.
 
 # ---- Frontend build ------------------------------------------------------
-FROM node:20-alpine AS frontend
+FROM node:26-alpine AS frontend
 WORKDIR /app/web
 COPY web/package.json web/package-lock.json* ./
 RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
