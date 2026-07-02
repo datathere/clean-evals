@@ -16,7 +16,7 @@ help:
 	@echo "  clean          Remove build artefacts"
 
 install:
-	pip install -e ".[dev,postgres]"
+	pip install -e ".[dev,postgres,docs]"
 	cd web && npm install --no-audit --no-fund
 
 dev: install docker-up
