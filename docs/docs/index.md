@@ -14,21 +14,21 @@ evaluation data stored in your own environment.
 
 ## Capabilities, in order of importance
 
-1. **[Dataset Builder](guides/dataset-builder.md)** — bring inputs, run them
-   through your candidate models, pick or edit the best output, lock it in
-   as the expected answer. The golden dataset emerges from working with
-   real data.
+1. **[Dataset Builder](guides/dataset-builder.md)** — upload inputs,
+   generate outputs from candidate models, pick or edit the best output,
+   and lock it as the expected answer. Locked cases form the golden
+   dataset.
 
 2. **Eval Runner** — async, queue-backed (Celery + Redis), deterministic,
    plugin-extensible. Strict typing, clean public API, machine- and
    human-readable output.
 
-3. **Decision UI** — the headline view shows three model recommendations
-   side-by-side (max accuracy, best price/performance, lowest cost) with
-   the [comparison math](concepts/recommendations.md) visible, plus per-case
+3. **Decision UI** — shows three model recommendations per run
+   (max accuracy, best price/performance, lowest cost) with
+   the [comparison math](concepts/recommendations.md), plus per-case
    heatmaps and cost projections.
 
-## Get started in 5 minutes
+## Quick start
 
 ```bash
 pip install clean-evals
@@ -45,22 +45,19 @@ Full walk-through: [Getting started](getting-started.md).
 
 ## Design principles
 
-clean-evals is built to be a tool a senior engineer reads and trusts in
-fifteen minutes:
-
-- **Boring, typed Python.** `mypy --strict`, no `Any`, no metaclass tricks.
+- **Strictly typed Python.** `mypy --strict`, no `Any`, no metaclasses.
 - **Pure-async core.** Adapters and the runner are `async`-native.
-- **Zero-magic config.** Pydantic with `extra="forbid"`. Datasets are static
-  documents — no env-var interpolation, no Jinja, no string templating.
+- **Explicit config.** Pydantic with `extra="forbid"`. Datasets are static
+  documents with no env-var interpolation and no template engine.
 - **Failure is data.** A model erroring on a case produces a `CaseResult`
-  with `status="error"` — runs never crash on a single bad call.
+  with `status="error"`; the run continues.
 - **Determinism by default.** With `temperature=0` + a seeded provider, the
   same dataset + same models produce byte-identical scored output.
-- **Everything is inspectable.** Readable source, plugin extension points,
-  and dated model snapshots, so every result traces back to the exact
-  model that produced it.
+- **Inspectable results.** Readable source, plugin extension points, and
+  dated model snapshots, so results trace back to the exact model that
+  produced them.
 
-## Architecture at a glance
+## Architecture
 
 ```mermaid
 flowchart LR

@@ -1,9 +1,9 @@
 # Writing a custom reporter
 
-Reporters write a `RunResult` to a destination. The default trio
-(`markdown`, `jsonl`, `junit`) plus `console` covers the common cases.
+Reporters write a `RunResult` to a destination. The built-in reporters
+(`markdown`, `jsonl`, `junit`, `console`) cover the common cases.
 
-Examples of valid custom reporters:
+Examples of custom reporters:
 
 - Push results to a Slack channel.
 - Upload to a BI tool.

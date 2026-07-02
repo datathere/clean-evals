@@ -1,9 +1,9 @@
 # Dataset Builder
 
-The hardest part of any eval project is building the golden dataset.
-clean-evals treats this as a first-class flow.
+The Dataset Builder is the workflow for building a golden dataset from
+input data.
 
-## The flow
+## Workflow
 
 1. **Bring inputs.** Upload a CSV / JSON / JSONL / YAML file of input
    cases — no expected outputs required.

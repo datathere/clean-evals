@@ -24,7 +24,7 @@ cases:
     tags: [happy-path]
 ```
 
-Unknown top-level keys are errors, not warnings (`extra="forbid"` on
+Unknown top-level keys are rejected with an error (`extra="forbid"` on
 all Pydantic models).
 
 ## Sidecar JSONL

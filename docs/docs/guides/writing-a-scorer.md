@@ -1,8 +1,8 @@
 # Writing a custom scorer
 
-Scorers are the quickest extension point. A scorer is any class that
-implements the [`Scorer`](../api.md#clean_evals.Scorer) protocol — no base
-class to inherit, no decorator.
+A scorer is any class that implements the
+[`Scorer`](../api.md#clean_evals.Scorer) protocol — no base class to
+inherit, no decorator.
 
 ## Skeleton
 

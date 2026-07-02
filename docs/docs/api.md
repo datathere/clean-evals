@@ -1,6 +1,7 @@
 # Public API
 
-This page is the contract. Everything else is implementation detail.
+This page lists the public API. Everything not listed here is
+implementation detail.
 
 Anything under `clean_evals._internal` may change without notice. The public
 surface follows SemVer; breaking changes ratchet majors. Pre-1.0, minor

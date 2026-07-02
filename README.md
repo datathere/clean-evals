@@ -22,10 +22,9 @@ box, and anything else through an adapter plugin.
 
 Its capabilities, in order of importance:
 
-1. **Dataset Builder.** Bring your inputs, run them through candidate models,
-   pick or edit the best output, and lock it in as the expected answer. The
-   golden dataset emerges from working with real data rather than from
-   authoring JSON by hand.
+1. **Dataset Builder.** Upload your inputs, generate outputs from candidate
+   models, pick or edit the best output, and lock it as the expected
+   answer. Locked cases form the golden dataset.
 2. **Eval Runner.** Async, queue-backed (Celery + Redis) or inline,
    deterministic where the provider allows it, and plugin-extensible, with
    strict typing and machine- and human-readable output.

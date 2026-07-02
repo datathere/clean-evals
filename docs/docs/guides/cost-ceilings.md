@@ -1,9 +1,9 @@
 # Cost ceilings
 
-A pair of guardrails reduces the chance of an eval running away with your
-budget. Both are **best-effort estimates**, computed from the bundled
-pricing snapshot — they are not billing guarantees. Always verify actual
-spend in your model provider's billing console.
+Two limits bound spending during eval runs. Both are **best-effort
+estimates**, computed from the bundled pricing snapshot rather than
+provider billing data. Always verify actual spend in your model provider's
+billing console.
 
 ## Per-run limit
 
@@ -41,9 +41,9 @@ the per-run `max_cost_usd` takes over.
   provider-side price changes or untracked runs mean real spend can differ.
 - **No retry loops without backoff.** All adapter retries use exponential
   backoff with jitter, plus `Retry-After` honour (capped at 120 seconds).
-- **No magic concurrency cap.** The runner runs as fast as the provider
-  allows and backs off automatically on 429s. Set explicit per-provider
-  caps when you share an API key with humans:
+- **Concurrency caps are explicit.** By default the runner issues requests
+  as fast as the provider allows and backs off on 429s. Set per-provider
+  caps when the API key is shared with other consumers:
 
 ```yaml
 concurrency:

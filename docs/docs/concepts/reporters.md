@@ -24,6 +24,6 @@ a major.
 
 ## Per-case diff
 
-When a case fails, a `case_<id>__<model>.diff.md` lands next to the run
-artifacts with the prompt sent, the expected vs actual, and the scorer
-breakdown.
+When a case fails, a `case_<id>__<model>.diff.md` is written next to the
+run artifacts with the prompt sent, the expected vs actual output, and the
+scorer breakdown.

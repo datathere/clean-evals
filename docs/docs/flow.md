@@ -1,8 +1,7 @@
 # The golden path
 
-This document describes the product's core workflow: how a user goes from
-"I have an AI feature and no idea which model to use" to "I picked a model,
-with evidence." The five stages map to the product's screens.
+This document describes the core workflow: five stages from uploading
+inputs to selecting a model. The stages map to the product's screens.
 
 ```mermaid
 flowchart LR
@@ -14,16 +13,16 @@ flowchart LR
     E -->|new cases, new models| B
 ```
 
-The loop in the middle is the central idea: **your ratings build the golden
-dataset and teach the judge at the same time.** The loop ends when the
-judge agrees with your ratings often enough to be trusted on its own.
+Ratings serve two purposes: they build the golden dataset and provide the
+calibration material for the LLM judge. The stage 3–4 loop ends when the
+judge's agreement with your ratings reaches a level you accept.
 
 ---
 
 ## Stage 1 — Bring inputs
 
-A model request is never just "a prompt". Real applications compose up to
-three layers, and they change at different speeds:
+A model request is composed of up to three layers, which change at
+different rates:
 
 | Layer | What it is | Example | Changes |
 | ----- | ---------- | ------- | ------- |
@@ -31,8 +30,8 @@ three layers, and they change at different speeds:
 | **Context** | Reference material the model reads | Policy doc, product catalog, schema, the retrieved chunks in a RAG app | Per app *or* per case |
 | **Variables** | The dynamic data being processed | The ticket, the user message, the record | **Per call** |
 
-The eval only makes sense if clean-evals knows which layer is which — so
-the very first question the setup asks is:
+clean-evals must know which layer is which, so setup starts with one
+question:
 
 ### "How does your app talk to the model?"
 
@@ -82,14 +81,14 @@ field, JSON when there are several. Named placeholders (`{ticket}`,
   with the *variables*, not the assembled string — so you can rewrite the
   system prompt later and re-evaluate against the same locked dataset.
   In Path A, changing your prompt requires a new dataset.
-- **Prompt iteration becomes an eval, later.** Once the system prompt is a
-  first-class field, "prompt v2 vs prompt v3, same model, same cases" is
-  the same machinery as "model A vs model B".
-- **Cost estimates get accurate.** A 30-page shared context dominates token
-  cost; knowing it's a shared prefix also lets cost projection account for
-  provider prompt caching.
-- **Review stays readable.** Stage 3 shows the reviewer the ticket itself,
-  not the repeated instructions.
+- **Prompt iteration reuses the same machinery.** With the system prompt
+  stored as its own field, comparing prompt v2 to prompt v3 on the same
+  cases works the same way as comparing model A to model B.
+- **Cost estimates are more accurate.** A 30-page shared context dominates
+  token cost; knowing it is a shared prefix also lets cost projection
+  account for provider prompt caching.
+- **Review shows only the case data.** Stage 3 shows the reviewer the
+  ticket itself; the repeated instructions are omitted.
 
 ### Upload format (both paths)
 
@@ -138,14 +137,13 @@ remaining columns are variables:
 more than 50 makes stage 3 review slow. Grow the dataset after the flow
 works end to end.
 
-**Where real teams get these:** production logs, support exports, QA
-spreadsheets. If the data contains PII, scrub it first — see
+**Common sources:** production logs, support exports, QA spreadsheets. If
+the data contains PII, scrub it first — see
 [Production data and PII](guides/pii.md).
 
-**UI contract for this stage:** a two-question wizard (request shape, then
-context shape) instead of a bare file input; inline examples and a
-downloadable template per path; and the assembled-request preview before
-anything is saved.
+**UI for this stage:** a two-question wizard (request shape, then context
+shape), inline examples and a downloadable template per path, and the
+assembled-request preview before anything is saved.
 
 ---
 
@@ -155,9 +153,8 @@ You picked models you're considering (say `claude-haiku-4-5-20251001`,
 `gpt-4o-mini-2024-07-18`, `gemini-2.0-flash-001`). clean-evals runs the dataset
 through the candidate models once and stores the outputs.
 
-Nothing is scored yet — there is nothing to score against. These outputs
-exist so you can *choose* the golden answer from real material instead of
-authoring JSON by hand.
+Outputs are not scored at this stage. They are the material for selecting
+golden answers in stage 3.
 
 - Cost guard: the run shows a cost estimate before it starts and respects
   `max_cost_usd`.
@@ -168,7 +165,7 @@ authoring JSON by hand.
 
 ## Stage 3 — Review & rate
 
-The core screen. One case at a time:
+One case is shown at a time:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -190,8 +187,8 @@ This is **human review** (what other tools call annotation). Per case you
 do three things:
 
 1. **Rate the outputs 1–5.** Outputs are shown **blind** — model names
-   hidden until after you rate, so brand reputation can't leak into the
-   scores.
+   are hidden until after you rate, so the model's identity does not
+   influence the rating.
 2. **Write feedback where a rating needs explaining.** "Too verbose",
    "wrong category, this is fraud not billing", "perfect format". This
    text becomes judge calibration material in stage 4.
@@ -199,9 +196,9 @@ do three things:
    The locked answer is the **expected output** — the ground truth — for
    that case.
 
-Progress is visible the whole time: `17/40 locked`. Once fully locked, the
-dataset is **golden** — versioned and immutable from then on;
-edits bump the version so old runs stay comparable.
+Progress is shown as `17/40 locked`. Once fully locked, the dataset is
+**golden** — versioned and immutable from then on; edits bump the version
+so old runs stay comparable.
 
 ---
 
@@ -210,10 +207,10 @@ edits bump the version so old runs stay comparable.
 Deterministic tasks (classification, extraction) can stop here — `exact_match`
 or `json_field_match` against the golden answer is cheap and objective.
 
-Open-ended tasks (summaries, drafts, rewrites) need **LLM-as-a-judge** —
-and an uncalibrated judge is just a different model's opinion. Calibration
-(the industry also says *aligning* the judge) turns your Stage 3 review
-into the judge's standard:
+Open-ended tasks (summaries, drafts, rewrites) need **LLM-as-a-judge**.
+An uncalibrated judge scores by its own default criteria; calibration
+(also called *judge alignment*) derives the judge's criteria from your
+stage 3 review:
 
 1. The expected output, your ratings, and your written feedback become
    few-shot examples in the judge prompt: *this output got 2/5 because
@@ -223,21 +220,20 @@ into the judge's standard:
    plus one overall number (% within ±1 point, and Cohen's kappa — the
    standard chance-corrected agreement statistic; ≥ 0.6 is the commonly
    used bar).
-4. Disagree with the judge somewhere? Add feedback on that case and
-   re-calibrate. **Loop until the agreement number satisfies you.**
+4. Where you disagree with the judge, add feedback on that case and
+   re-calibrate. Repeat until agreement reaches a level you accept.
 
 The judge config (model, prompt, few-shot examples, version) is stored with
-the dataset, so future runs are scored by the standard you signed
-off on.
+the dataset, so future runs are scored with the configuration you
+approved.
 
 ---
 
 ## Stage 5 — Evaluate & decide
 
-Now — and only now — the classic eval run (LangSmith and Braintrust call
-this an *experiment*): the selected models run against the golden dataset, scored by
-the calibrated judge (or exact match), producing what the Decision UI
-already shows:
+Stage 5 is the eval run (LangSmith and Braintrust call this an
+*experiment*): the selected models run against the golden dataset, scored
+by the calibrated judge or exact match. The Decision UI shows:
 
 - **Leaderboard** — score, pass rate, p95 latency, $/run, $/correct.
 - **Three recommendations** — max accuracy, best price/performance, lowest
@@ -246,17 +242,17 @@ already shows:
   to the full input/golden/answer view.
 - **Cost projection** — monthly cost at your real traffic volume.
 
-New model comes out next quarter? Add it, rerun Stage 5 against the same
-locked dataset and judge. The comparison stays valid because the standard
-did not change.
+To evaluate a new model later, add it and rerun stage 5 against the same
+locked dataset and judge. Scores remain comparable because the dataset and
+judge configuration are unchanged.
 
 ---
 
-## Where the implementation stands
+## Implementation status
 
 All five stages are built and connected in the web UI:
 
-| Stage | Where it lives |
+| Stage | Location |
 | ----- | -------------- |
 | 1 · Bring inputs | Upload wizard with both request shapes, prompt spec stored on the dataset, assembled-request preview |
 | 2 · Generate candidates | "Generate candidates" in the Dataset Builder, or `clean-evals generate` on the CLI |

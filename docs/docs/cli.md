@@ -36,7 +36,7 @@ clean-evals calibrate 5 [--judge claude-haiku-4-5-20251001]
 not scored, and the command prints the Dataset Builder URL where you rate
 them. `calibrate` requires rated outputs, prints the judge agreement
 (exact, within ±1, kappa), stores a new judge configuration version, and
-warns when kappa lands below 0.6.
+warns when kappa is below 0.6.
 
 ## `clean-evals run` options
 
@@ -77,5 +77,5 @@ clean-evals reads keys from environment variables. There is no
 | Google       | `GOOGLE_API_KEY`       |
 | OpenRouter   | `OPENROUTER_API_KEY`   |
 
-For multiple profiles, drop a `~/.config/clean-evals/config.toml` and
-swap with a profile flag (planned post-v0.4).
+Profile support via `~/.config/clean-evals/config.toml` and a profile
+flag is planned (post-v0.4).

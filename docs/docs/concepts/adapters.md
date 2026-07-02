@@ -23,7 +23,7 @@ class ModelAdapter(Protocol):
   upstreams) takes its cost from the provider response.
 - **Surface 429s clearly.** Raise `RateLimited` with the parsed
   `Retry-After` value so the runner can back off.
-- **Use clean exception types.** `ProviderTimeout`, `ProviderError`,
+- **Use the defined exception types.** `ProviderTimeout`, `ProviderError`,
   `SchemaInvalidResponse`. Defined in `clean_evals.errors`.
 
 ## Provider auth

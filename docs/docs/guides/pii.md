@@ -16,15 +16,16 @@ class Scrubber(Protocol):
 Called by `Dataset.from_yaml(..., scrubber=...)` once per case after
 parsing. Implementations must be pure — same input, same output.
 
-## Why no auto-scrub
+## Why there is no auto-scrub
 
-Auto-scrubbing creates false safety. A regex that matches "email-shaped"
-strings will miss a hand-rolled customer-id. A heuristic that catches "SSN-shaped"
-numbers will scrub a six-digit confirmation code. The wrong scrubber on
-production data is more dangerous than no scrubber at all.
+Generic scrubbing rules produce unreliable results: a regex for
+email-shaped strings misses a custom customer-id format, and a heuristic
+for SSN-shaped numbers scrubs six-digit confirmation codes. Correct
+scrubbing rules depend on your data, so clean-evals requires you to
+provide them.
 
-clean-evals' position: **scrubbing is the dataset loader's responsibility,
-not clean-evals' core**. The contract is small and explicit:
+Scrubbing is implemented at the dataset-loading boundary through one
+explicit contract:
 
 ```python
 from clean_evals import Dataset, Scrubber
@@ -37,8 +38,8 @@ class CompanyScrubber:
 ds = Dataset.from_yaml("path.yml", scrubber=CompanyScrubber())
 ```
 
-## Datasets are safe to commit (after scrubbing)
+## Committing scrubbed datasets
 
-YAML is a static document. No env-var interpolation, no Jinja, no string
-templating. If the file is in your repo, what's in it is what was meant to
-be in it.
+Dataset YAML is a static document with no env-var interpolation and no
+template engine. The file contents are exactly what the runner sends, so
+a scrubbed dataset can be reviewed and committed like any other file.

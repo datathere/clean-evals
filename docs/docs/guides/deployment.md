@@ -36,10 +36,10 @@ docker-compose up
 ```
 
 `docker-compose.yml` brings up MySQL (or Postgres if `DB_FLAVOR=postgres`),
-Redis, the worker, beat, and the web server in one command. Every published
-port binds to `127.0.0.1`, so nothing is reachable from other machines. The
-bundled database and Redis credentials are development defaults — one more
-reason the stack must stay local.
+Redis, the worker, beat, and the web server in one command. All published
+ports bind to `127.0.0.1`, so the services are reachable only from the
+machine running them. The bundled database and Redis credentials are
+development defaults; do not expose these services to a network.
 
 ## Artifacts
 
@@ -60,9 +60,8 @@ clean-evals migrate
 
 ## Cost safety nets
 
-Both limits are **best-effort**. They reduce the blast radius of a mistake;
-they do not guarantee a spend ceiling. Always verify actual spend in your
-provider's billing console.
+Both limits are **best-effort** and do not guarantee a spend ceiling.
+Always verify actual spend in your provider's billing console.
 
 - **Per-run limit:** `--max-cost` (default $5). Spend is checked as results
   arrive; cases that have not started when the ceiling trips are aborted,

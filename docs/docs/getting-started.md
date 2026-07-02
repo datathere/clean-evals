@@ -1,7 +1,7 @@
 # Getting started
 
-This page produces a real eval result on your first try. Five minutes from
-empty terminal to a leaderboard with three recommendations.
+This page covers installation, a first eval run against an example
+dataset, and opening the results in the Decision UI.
 
 ## 1. Install
 
@@ -18,7 +18,7 @@ empty terminal to a leaderboard with three recommendations.
     clean-evals migrate
     ```
 
-=== "Docker (zero-touch)"
+=== "Docker"
 
     ```bash
     git clone https://github.com/datathere/clean-evals
@@ -67,14 +67,14 @@ clean-evals serve          # http://localhost:8080
 
 You'll see your run on the **Runs** page. Click it for the Decision view:
 
-- Three side-by-side recommendation cards with the math visible.
+- Three side-by-side recommendation cards with the numbers behind each pick.
 - A sortable leaderboard.
 - A per-case heatmap. Click any cell to see the expected vs actual diff.
 - A cost-projection calculator.
 
 ## 5. Build your own dataset
 
-Drop a CSV / JSON / JSONL / YAML of inputs into the **Dataset Builder**:
+Upload a CSV / JSON / JSONL / YAML file of inputs to the **Dataset Builder**:
 
 ```bash
 clean-evals build my_inputs.csv --name my_eval --version v1
