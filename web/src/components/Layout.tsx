@@ -4,7 +4,6 @@ import {
   CalendarClock,
   Database,
   FileBarChart,
-  HardDriveUpload,
   Moon,
   Sun,
 } from "lucide-react";
@@ -21,7 +20,6 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { key: "datasets", label: "Datasets", href: "/datasets", icon: Database },
-  { key: "builder", label: "Dataset Builder", href: "/builder", icon: HardDriveUpload },
   { key: "runs", label: "Runs", href: "/runs", icon: FileBarChart },
   { key: "models", label: "Models", href: "/models", icon: Boxes },
   { key: "schedules", label: "Schedules", href: "/schedules", icon: CalendarClock },
@@ -52,9 +50,10 @@ export function Layout({ children, currentRoute, navigate }: Props) {
           </a>
           <nav className="flex items-center gap-1 text-sm">
             {NAV.map((item) => {
+              // The builder edits datasets, so it highlights the Datasets item.
               const active =
                 currentRoute === item.key ||
-                (item.key === "datasets" && currentRoute === "datasets");
+                (item.key === "datasets" && currentRoute === "builder");
               const Icon = item.icon;
               return (
                 <a
