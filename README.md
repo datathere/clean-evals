@@ -3,8 +3,8 @@
 > Measure AI quality across models. Build a golden dataset by working with real
 > data. Pick the right model with the math in plain view.
 
-[![PyPI version](https://img.shields.io/pypi/v/clean-evals.svg)](https://pypi.org/project/clean-evals/)
-[![Python versions](https://img.shields.io/pypi/pyversions/clean-evals.svg)](https://pypi.org/project/clean-evals/)
+[![PyPI version](https://img.shields.io/pypi/v/clean-evals)](https://pypi.org/project/clean-evals/)
+[![Python versions](https://img.shields.io/pypi/pyversions/clean-evals)](https://pypi.org/project/clean-evals/)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 [![CI](https://github.com/datathere/clean-evals/actions/workflows/ci.yml/badge.svg)](https://github.com/datathere/clean-evals/actions)
 
