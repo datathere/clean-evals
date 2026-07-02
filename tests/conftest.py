@@ -20,6 +20,11 @@ def _isolate_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[No
         "OPENAI_API_KEY",
         "GOOGLE_API_KEY",
         "OPENROUTER_API_KEY",
+        # The CLI tests run the real entry point, which loads .env into the
+        # process; without stripping these, a developer's local Ollama URL
+        # makes probe tests hit a live server mid-suite.
+        "CLEAN_EVALS_LOCAL_BASE_URL",
+        "CLEAN_EVALS_LOCAL_API_KEY",
         "CLEAN_EVALS_DAILY_COST_LIMIT_USD",
         "CLEAN_EVALS_DATABASE_URL",
         "CLEAN_EVALS_ARTIFACT_STORE",
