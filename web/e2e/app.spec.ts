@@ -63,3 +63,17 @@ test("creates a dataset through the upload wizard", async ({ page }) => {
   await expect(page.getByText("ticket_001").first()).toBeVisible();
   await expect(page.getByText("ticket_002").first()).toBeVisible();
 });
+
+test("clicking a dataset row opens the case editor", async ({ page }) => {
+  await page.goto("/datasets");
+  await page.getByText("sample-ticket-triage").first().click();
+  await expect(page).toHaveURL(/\/builder\/\d+/);
+  await expect(page.getByRole("heading", { name: /sample-ticket-triage/ })).toBeVisible();
+});
+
+test("unknown urls show the not-found page", async ({ page }) => {
+  await page.goto("/definitely/not/a/page");
+  await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
+  await page.getByRole("button", { name: "Go to datasets" }).click();
+  await expect(page.getByRole("heading", { name: "Datasets", exact: true })).toBeVisible();
+});

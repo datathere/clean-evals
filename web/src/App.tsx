@@ -18,7 +18,8 @@ type Route =
   | { name: "cost"; runId: string }
   | { name: "builder"; datasetId?: number }
   | { name: "models" }
-  | { name: "schedules" };
+  | { name: "schedules" }
+  | { name: "not-found" };
 
 function parseRoute(path: string, search: string): Route {
   const segments = path.split("/").filter(Boolean);
@@ -34,11 +35,15 @@ function parseRoute(path: string, search: string): Route {
     return { name: "live", runId: segments[1] };
   if (segments[0] === "cost" && segments[1])
     return { name: "cost", runId: segments[1] };
-  if (segments[0] === "builder")
-    return { name: "builder", datasetId: segments[1] ? Number(segments[1]) : undefined };
+  if (segments[0] === "builder") {
+    if (segments[1] === undefined) return { name: "builder" };
+    const datasetId = Number(segments[1]);
+    if (Number.isInteger(datasetId)) return { name: "builder", datasetId };
+    return { name: "not-found" };
+  }
   if (segments[0] === "models") return { name: "models" };
   if (segments[0] === "schedules") return { name: "schedules" };
-  return { name: "datasets" };
+  return { name: "not-found" };
 }
 
 export default function App() {
@@ -73,6 +78,25 @@ export default function App() {
       )}
       {route.name === "models" && <ModelsPage />}
       {route.name === "schedules" && <SchedulesPage />}
+      {route.name === "not-found" && <NotFoundPage navigate={navigate} />}
     </Layout>
+  );
+}
+
+function NotFoundPage({ navigate }: { navigate: (path: string) => void }) {
+  return (
+    <div className="py-24 text-center space-y-4">
+      <h1 className="text-2xl font-semibold tracking-tight">Page not found</h1>
+      <p className="text-sm text-muted-foreground">
+        Nothing exists at <code>{window.location.pathname}</code>.
+      </p>
+      <button
+        type="button"
+        onClick={() => navigate("/datasets")}
+        className="text-sm underline underline-offset-4 hover:text-foreground"
+      >
+        Go to datasets
+      </button>
+    </div>
   );
 }

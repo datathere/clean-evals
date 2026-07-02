@@ -1,10 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowUpRight,
   BookOpenCheck,
   Calculator,
   DollarSign,
+  RotateCcw,
   ShieldCheck,
   Trophy,
   X,
@@ -39,6 +40,33 @@ export function RunDetailPage({ runId, navigate }: Props) {
   });
   const [selected, setSelected] = useState<CaseKey | null>(null);
 
+  // Re-run: same dataset version, same config, then land on the new run.
+  const [rerunPolling, setRerunPolling] = useState(false);
+  const [rerunError, setRerunError] = useState<string | null>(null);
+  const datasetId = run.data?.dataset_id;
+  const rerunStatus = useQuery({
+    queryKey: ["inline-run", datasetId],
+    queryFn: () => api.inlineRunStatus(datasetId as number),
+    enabled: rerunPolling && datasetId !== undefined,
+    refetchInterval: rerunPolling ? 1000 : false,
+  });
+  const rerun = useMutation({
+    mutationFn: () =>
+      api.triggerRun(datasetId as number, run.data?.config ?? {}),
+    onSuccess: () => {
+      setRerunError(null);
+      setRerunPolling(true);
+    },
+    onError: (e: Error) => setRerunError(e.message),
+  });
+  const newRunId =
+    rerunPolling && rerunStatus.data?.status === "done" ? rerunStatus.data.run_id : null;
+  useEffect(() => {
+    if (newRunId && newRunId !== runId) navigate(`/runs/${newRunId}`);
+  }, [newRunId, runId, navigate]);
+  const rerunFailed = rerunPolling && rerunStatus.data?.status === "error";
+  const rerunning = rerun.isPending || (rerunPolling && rerunStatus.data?.status === "running");
+
   if (run.isLoading) {
     return (
       <div className="flex items-center gap-2 text-muted-foreground">
@@ -72,7 +100,7 @@ export function RunDetailPage({ runId, navigate }: Props) {
             variant="secondary"
             onClick={() => navigate(`/builder/${run.data.dataset_id}`)}
           >
-            <BookOpenCheck className="size-4" /> Golden dataset
+            <BookOpenCheck className="size-4" /> Edit cases
           </Button>
           <Button variant="secondary" onClick={() => navigate(`/cost/${runId}`)}>
             <Calculator className="size-4" /> Cost projection
@@ -80,8 +108,17 @@ export function RunDetailPage({ runId, navigate }: Props) {
           <Button variant="secondary" onClick={() => navigate(`/live/${runId}`)}>
             <ArrowUpRight className="size-4" /> Live progress
           </Button>
+          <Button onClick={() => rerun.mutate()} disabled={rerunning}>
+            {rerunning ? <Spinner /> : <RotateCcw className="size-4" />}
+            {rerunning ? "Re-running…" : "Re-run"}
+          </Button>
         </div>
       </div>
+      {(rerunError || rerunFailed) && (
+        <div className="text-xs text-destructive">
+          {rerunError ?? rerunStatus.data?.detail ?? "re-run failed"}
+        </div>
+      )}
 
       {/* Recommendations */}
       <div>

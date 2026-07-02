@@ -7,7 +7,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { TD, TH, THead, TR, Table } from "@/components/ui/Table";
 import { Badge } from "@/components/ui/Badge";
 import { api } from "@/lib/api";
-import { formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 
 interface Props {
   navigate: (path: string) => void;
@@ -81,14 +81,24 @@ export function DatasetsPage({ navigate }: Props) {
                   return (
                     <Fragment key={name}>
                       {rows.map((d, i) => (
-                  <TR key={d.id} className={i > 0 ? "bg-muted/20" : undefined}>
+                  <TR
+                    key={d.id}
+                    className={cn(
+                      "cursor-pointer hover:bg-secondary/30",
+                      i > 0 && "bg-muted/20",
+                    )}
+                    onClick={() => navigate(`/builder/${d.id}`)}
+                  >
                     <TD className="font-medium">
                       <span className="inline-flex items-center gap-1.5">
                         {i === 0 && older.length > 0 && (
                           <button
                             type="button"
                             aria-label={`Show versions of ${name}`}
-                            onClick={() => toggle(name)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggle(name);
+                            }}
                             className="text-muted-foreground hover:text-foreground"
                           >
                             {open ? (
@@ -136,7 +146,10 @@ export function DatasetsPage({ navigate }: Props) {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => navigate(`/builder/${d.id}`)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/builder/${d.id}`);
+                          }}
                         >
                           <PencilRuler className="size-3.5" />
                           Edit cases
@@ -144,7 +157,10 @@ export function DatasetsPage({ navigate }: Props) {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => navigate(`/runs?dataset_id=${d.id}`)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/runs?dataset_id=${d.id}`);
+                          }}
                         >
                           <FileBarChart className="size-3.5" />
                           View runs
