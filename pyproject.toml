@@ -1,0 +1,234 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "clean-evals"
+version = "0.1.0"
+description = "Measure AI quality across models. Decisions, not data."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "datathere", email = "open-source@datathere.com" },
+]
+keywords = ["ai", "evals", "llm", "evaluation", "benchmark", "anthropic", "openai"]
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
+]
+dependencies = [
+    "pydantic>=2.7,<3",
+    "pyyaml>=6.0",
+    "httpx>=0.27",
+    "typer>=0.12",
+    "rich>=13.7",
+    "celery[redis]>=5.4",
+    "redis>=5.0",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "sse-starlette>=2.0",
+    "python-multipart>=0.0.9",
+    # [rsa] pulls in cryptography, required for MySQL 8's default
+    # caching_sha2_password auth plugin.
+    "pymysql[rsa]>=1.1",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+postgres = [
+    "psycopg2-binary>=2.9",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=4.1",
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "black>=24.4",
+    "types-PyYAML",
+    "respx>=0.21",
+    "httpx>=0.27",
+    "build>=1.2",
+]
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.25",
+]
+
+[project.urls]
+Homepage = "https://github.com/datathere/clean-evals"
+Documentation = "https://datathere.github.io/clean-evals"
+Repository = "https://github.com/datathere/clean-evals"
+Issues = "https://github.com/datathere/clean-evals/issues"
+Changelog = "https://github.com/datathere/clean-evals/blob/main/CHANGELOG.md"
+
+[project.scripts]
+clean-evals = "clean_evals.cli:app"
+
+# ---------------------------------------------------------------------------
+# Built-in plugin registrations (entry points)
+# ---------------------------------------------------------------------------
+
+[project.entry-points."clean_evals.adapters"]
+anthropic = "clean_evals.adapters.anthropic:AnthropicAdapter"
+openai = "clean_evals.adapters.openai:OpenAIAdapter"
+google = "clean_evals.adapters.google:GoogleAdapter"
+openrouter = "clean_evals.adapters.openrouter:OpenRouterAdapter"
+
+[project.entry-points."clean_evals.scorers"]
+exact_match = "clean_evals.scorers.exact_match:ExactMatchScorer"
+json_field_match = "clean_evals.scorers.json_field_match:JsonFieldMatchScorer"
+llm_judge = "clean_evals.scorers.llm_judge:LLMJudgeScorer"
+
+[project.entry-points."clean_evals.reporters"]
+markdown = "clean_evals.reporters.markdown:MarkdownReporter"
+jsonl = "clean_evals.reporters.jsonl:JSONLReporter"
+junit = "clean_evals.reporters.junit:JUnitReporter"
+console = "clean_evals.reporters.console:ConsoleReporter"
+
+# ---------------------------------------------------------------------------
+# Hatch build config — bundle the React build output in the wheel
+# ---------------------------------------------------------------------------
+
+[tool.hatch.build]
+include = [
+    "src/clean_evals/**/*.py",
+    "src/clean_evals/web/static/**",
+    "src/clean_evals/storage/migrations/**",
+    "src/clean_evals/py.typed",
+    "README.md",
+    "LICENSE",
+    "BRANDING.md",
+    "CHANGELOG.md",
+]
+# The static bundle is gitignored (built by `npm run build`), so it must be
+# declared an artifact — hatchling drops VCS-ignored files otherwise.
+artifacts = ["src/clean_evals/web/static/**"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/clean_evals"]
+
+# ---------------------------------------------------------------------------
+# Tooling configuration
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "B",        # bugbear
+    "UP",       # pyupgrade
+    "N",        # pep8-naming
+    "SIM",      # simplify
+    "RUF",      # ruff-specific
+    "ASYNC",    # async correctness
+    "ARG",      # unused args
+    "PT",       # pytest style
+    "TID",      # tidy imports
+    "C4",       # comprehensions
+    "PIE",      # misc
+    "PL",       # pylint subset
+]
+ignore = [
+    "E501",     # line length handled by black
+    "PLR0913",  # too many args
+    "PLR0911",  # too many returns
+    "PLR0912",  # too many branches
+    "PLR0915",  # too many statements
+    "PLR2004",  # magic value comparisons
+    "PLC0415",  # import-outside-top-level (deliberate in CLI / lazy paths)
+    "B008",     # function calls in defaults (FastAPI Depends pattern)
+    "N818",     # error-suffix on exception names — domain-specific naming
+    "RUF002",   # ambiguous unicode in docstrings (em dash, en dash on purpose)
+    "RUF003",   # ambiguous unicode in comments
+    "PLW0603",  # global statement (deliberate singleton)
+    "ASYNC230", # async open from sync context (we keep this contained)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR2004", "ARG", "S101", "PT011"]
+"src/clean_evals/cli.py" = ["B008"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["clean_evals"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311", "py312", "py313"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+warn_unused_ignores = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+no_implicit_reexport = true
+plugins = ["pydantic.mypy"]
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["celery.*", "sse_starlette.*"]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.pytest.ini_options]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=clean_evals",
+    "--cov-report=term-missing",
+    "--cov-report=xml",
+]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "integration: integration tests requiring docker-compose services",
+    "slow: tests that take >1s",
+]
+
+[tool.coverage.run]
+source = ["src/clean_evals"]
+branch = true
+parallel = true
+
+[tool.coverage.paths]
+source = ["src/clean_evals", "*/site-packages/clean_evals"]
+
+[tool.coverage.report]
+# Floor for v0.1. Ratchet to 80 once docker-compose-backed integration
+# tests cover Celery tasks, Alembic migrations, and the full web flow.
+fail_under = 60
+show_missing = true
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "@overload",
+    "@abstractmethod",
+]

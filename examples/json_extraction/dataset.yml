@@ -1,0 +1,106 @@
+name: json_extraction
+version: v1
+description: Extract structured fields from raw text. JSON-mode output.
+scorer: json_field_match
+scorer_config:
+  weights: { name: 1.0, role: 1.0, employer: 1.0, years: 0.5 }
+  pass_threshold: 0.85
+  response_format: json
+  prompt_template: |
+    Extract the following fields from the text below and return ONLY a JSON
+    object with these keys: name, role, employer, years.
+
+    - name: full name (string)
+    - role: their job title (string)
+    - employer: company name (string)
+    - years: years of experience (integer); use null if not stated.
+
+    Text:
+    {prompt}
+cases:
+  - id: ex_001
+    input:
+      prompt: >-
+        Hi, I'm Maria Sanchez. I've been a Senior Data Engineer at Acme Corp for
+        the past six years.
+    expected:
+      name: Maria Sanchez
+      role: Senior Data Engineer
+      employer: Acme Corp
+      years: 6
+  - id: ex_002
+    input:
+      prompt: "John Doe, currently a Product Manager at Beta Inc."
+    expected:
+      name: John Doe
+      role: Product Manager
+      employer: Beta Inc
+      years: null
+  - id: ex_003
+    input:
+      prompt: >-
+        Aisha Khan here. I'm a Staff Engineer at GammaLabs after twelve years
+        in the industry.
+    expected:
+      name: Aisha Khan
+      role: Staff Engineer
+      employer: GammaLabs
+      years: 12
+  - id: ex_004
+    input:
+      prompt: "Hello — Lin Wu, Data Scientist, DeltaTech, 3 years in role."
+    expected:
+      name: Lin Wu
+      role: Data Scientist
+      employer: DeltaTech
+      years: 3
+  - id: ex_005
+    input:
+      prompt: "Carlos Pereira, VP of Engineering @ Epsilon, two decades of work."
+    expected:
+      name: Carlos Pereira
+      role: VP of Engineering
+      employer: Epsilon
+      years: 20
+  - id: ex_006
+    input:
+      prompt: "I'm Priya Singh, ML researcher at Zeta AI."
+    expected:
+      name: Priya Singh
+      role: ML researcher
+      employer: Zeta AI
+      years: null
+  - id: ex_007
+    input:
+      prompt: "Name: Tom Becker. Role: SRE. Employer: Eta Networks. 8 yrs."
+    expected:
+      name: Tom Becker
+      role: SRE
+      employer: Eta Networks
+      years: 8
+  - id: ex_008
+    input:
+      prompt: >-
+        I work as a software architect at Theta Systems and have been there for
+        about 11 years. My name is Anna Petrova.
+    expected:
+      name: Anna Petrova
+      role: software architect
+      employer: Theta Systems
+      years: 11
+  - id: ex_009
+    input:
+      prompt: "Hi I'm Ben — DevOps Lead, Iota Cloud, 5 years."
+    expected:
+      name: Ben
+      role: DevOps Lead
+      employer: Iota Cloud
+      years: 5
+  - id: ex_010
+    input:
+      prompt: "Jordan Lee, Head of Design at Kappa Studio."
+    expected:
+      name: Jordan Lee
+      role: Head of Design
+      employer: Kappa Studio
+      years: null

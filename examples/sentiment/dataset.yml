@@ -1,0 +1,60 @@
+name: sentiment
+version: v1
+description: Three-class sentiment classification on short product reviews.
+scorer: exact_match
+scorer_config:
+  field: label
+  case_sensitive: false
+  prompt_template: |
+    Classify the sentiment of the following text as exactly one of:
+    "positive", "neutral", or "negative". Reply with only that single word.
+
+    Text:
+    {prompt}
+cases:
+  - id: pos_001
+    input:
+      prompt: "I absolutely love this product. It exceeded every expectation."
+    expected: { label: positive }
+    tags: [happy-path]
+  - id: pos_002
+    input: { prompt: "Best purchase I've made all year. Highly recommend." }
+    expected: { label: positive }
+    tags: [happy-path]
+  - id: pos_003
+    input: { prompt: "Sturdy build, fast shipping, exactly as described." }
+    expected: { label: positive }
+    tags: [happy-path]
+  - id: pos_004
+    input: { prompt: "The color is gorgeous and it fits perfectly." }
+    expected: { label: positive }
+  - id: neu_001
+    input: { prompt: "It works. Nothing special, nothing wrong." }
+    expected: { label: neutral }
+    tags: [neutral-tone]
+  - id: neu_002
+    input: { prompt: "Arrived on time. Functions as advertised." }
+    expected: { label: neutral }
+    tags: [neutral-tone]
+  - id: neu_003
+    input: { prompt: "Average product for the price range." }
+    expected: { label: neutral }
+  - id: neu_004
+    input: { prompt: "Same as the previous version." }
+    expected: { label: neutral }
+  - id: neg_001
+    input: { prompt: "Stopped working after two days. Terrible quality." }
+    expected: { label: negative }
+    tags: [edge-case]
+  - id: neg_002
+    input: { prompt: "Nothing about this lived up to the marketing." }
+    expected: { label: negative }
+  - id: neg_003
+    input:
+      prompt: >-
+        I expected better at this price. The packaging was destroyed and the
+        item itself feels cheap.
+    expected: { label: negative }
+  - id: neg_004
+    input: { prompt: "Avoid. Wish I could give zero stars." }
+    expected: { label: negative }

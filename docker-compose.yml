@@ -1,0 +1,145 @@
+name: clean-evals
+
+# COMPOSE_PROFILES picks the database backend. The stack starts MySQL when
+# COMPOSE_PROFILES=default (set in .env.example, read automatically from
+# .env); set COMPOSE_PROFILES=postgres and point CLEAN_EVALS_DATABASE_URL
+# at the postgres service to use Postgres instead.
+#
+# All published ports bind to 127.0.0.1: clean-evals has no authentication
+# and is a local tool. Do not expose these ports to other machines.
+
+x-clean-evals-env: &clean-evals-env
+  CLEAN_EVALS_DATABASE_URL: ${CLEAN_EVALS_DATABASE_URL:-mysql+pymysql://clean_evals:clean_evals@mysql:3306/clean_evals}
+  CELERY_BROKER_URL: redis://redis:6379/0
+  CELERY_RESULT_BACKEND: redis://redis:6379/0
+  CLEAN_EVALS_EVENT_CHANNEL: clean_evals.events
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+  OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+  CLEAN_EVALS_DAILY_COST_LIMIT_USD: ${CLEAN_EVALS_DAILY_COST_LIMIT_USD:-}
+  CLEAN_EVALS_LOG_LEVEL: ${CLEAN_EVALS_LOG_LEVEL:-INFO}
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+
+  mysql:
+    image: mysql:8.4
+    profiles: ["mysql", "default"]
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: clean_evals
+      MYSQL_USER: clean_evals
+      MYSQL_PASSWORD: clean_evals
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uclean_evals", "-pclean_evals"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["postgres"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: clean_evals
+      POSTGRES_USER: clean_evals
+      POSTGRES_PASSWORD: clean_evals
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clean_evals"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["default", "mysql", "postgres"]
+    command: ["clean-evals", "migrate"]
+    environment:
+      <<: *clean-evals-env
+    depends_on:
+      mysql:
+        condition: service_healthy
+        required: false
+      postgres:
+        condition: service_healthy
+        required: false
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["default", "mysql", "postgres"]
+    command: ["clean-evals", "worker", "--concurrency", "4"]
+    restart: unless-stopped
+    environment:
+      <<: *clean-evals-env
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - artifacts:/app/clean-evals-data/artifacts
+
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["default", "mysql", "postgres"]
+    command: ["clean-evals", "beat"]
+    restart: unless-stopped
+    environment:
+      <<: *clean-evals-env
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: ["default", "mysql", "postgres"]
+    command: ["clean-evals", "serve", "--host", "0.0.0.0", "--port", "8080"]
+    restart: unless-stopped
+    environment:
+      <<: *clean-evals-env
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - artifacts:/app/clean-evals-data/artifacts
+
+volumes:
+  redis-data:
+  mysql-data:
+  postgres-data:
+  artifacts:

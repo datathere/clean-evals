@@ -1,0 +1,79 @@
+name: summary_quality
+version: v1
+description: Rubric-graded one-sentence summaries scored by an LLM judge.
+scorer: llm_judge
+scorer_config:
+  judge_model: claude-haiku-4-5-20251001
+  pass_threshold: 0.7
+  rubric: |
+    Score the response on a 0-10 scale. The response should be:
+    - exactly one sentence
+    - faithful to the EXPECTED summary's facts
+    - free of hedging or filler
+
+    Return ONLY a JSON object: {"score": <0-10 integer>, "reason": "<one sentence>"}.
+  prompt_template: |
+    Summarise the text below in EXACTLY one sentence, no more.
+
+    Text:
+    {prompt}
+cases:
+  - id: sum_001
+    input:
+      prompt: >-
+        Photosynthesis is the process by which green plants and some other
+        organisms use sunlight to synthesise nutrients from carbon dioxide and
+        water. The process generates oxygen as a by-product.
+    expected:
+      summary: >-
+        Photosynthesis is how plants turn sunlight, CO2, and water into
+        nutrients, releasing oxygen.
+  - id: sum_002
+    input:
+      prompt: >-
+        The James Webb Space Telescope, launched in December 2021, is the
+        largest space telescope ever built and observes primarily in the
+        infrared.
+    expected:
+      summary: >-
+        Launched in 2021, the James Webb Space Telescope is the largest space
+        telescope and observes mostly in infrared.
+  - id: sum_003
+    input:
+      prompt: >-
+        Bitcoin was introduced in 2009 by an anonymous person or group named
+        Satoshi Nakamoto. It is a peer-to-peer digital currency that operates
+        without a central authority.
+    expected:
+      summary: >-
+        Bitcoin, launched in 2009 by Satoshi Nakamoto, is a peer-to-peer digital
+        currency without a central authority.
+  - id: sum_004
+    input:
+      prompt: >-
+        The Great Pacific Garbage Patch is a collection of marine debris in the
+        North Pacific Ocean. It is roughly twice the size of Texas.
+    expected:
+      summary: >-
+        The Great Pacific Garbage Patch is a marine-debris zone in the North
+        Pacific roughly twice the size of Texas.
+  - id: sum_005
+    input:
+      prompt: >-
+        TypeScript is a strongly typed programming language built on top of
+        JavaScript. It was developed by Microsoft and is widely used for
+        large-scale web applications.
+    expected:
+      summary: >-
+        TypeScript is a strongly typed superset of JavaScript developed by
+        Microsoft and used for large-scale web apps.
+  - id: sum_006
+    input:
+      prompt: >-
+        Antibiotic resistance occurs when bacteria evolve to survive drugs that
+        used to kill them. The WHO calls it one of the biggest threats to
+        global health.
+    expected:
+      summary: >-
+        Antibiotic resistance, which the WHO calls a major global health
+        threat, is when bacteria evolve to survive antibiotics.
