@@ -34,7 +34,11 @@ RUN groupadd --system --gid 1000 cleanevals \
 WORKDIR /app
 
 COPY --from=pybuild /wheels/*.whl /tmp/
-RUN pip install --no-cache-dir /tmp/*.whl[postgres] && rm /tmp/*.whl
+# The [postgres] extra cannot ride on the glob: sh reads the brackets as a
+# character class and the pattern stops matching the wheel.
+RUN WHEEL="$(ls /tmp/*.whl)" \
+ && pip install --no-cache-dir "${WHEEL}[postgres]" \
+ && rm /tmp/*.whl
 
 # Working dir for artifacts (mountable volume)
 RUN mkdir -p /app/clean-evals-data/artifacts \
