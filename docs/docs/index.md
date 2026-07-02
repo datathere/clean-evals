@@ -1,20 +1,23 @@
 # clean-evals
 
-> Measure AI quality across models. Build a golden dataset by working with real
-> data. Pick the right model with the math in plain view.
+> Try out your prompts and context across AI models. Run evals and find
+> the best model for your use case.
 
-clean-evals is a standalone open-source application for measuring AI
-quality across models. It runs as its own process — CLI plus local web
-UI — and owns its own data. You bring the prompts and inputs your
-application sends to a model; clean-evals measures which model answers
-them best and what that costs.
+clean-evals is an open-source application for evaluating AI model
+quality, reliability, and cost. It compares model outputs using the
+prompts and inputs from an existing application, supports blind review
+and golden dataset creation, and runs repeatable evaluations across
+models.
+
+clean-evals runs locally through a CLI and web interface, with
+evaluation data stored in your own environment.
 
 ## Capabilities, in order of importance
 
 1. **[Dataset Builder](guides/dataset-builder.md)** — bring inputs, run them
    through your candidate models, pick or edit the best output, lock it in
    as the expected answer. The golden dataset emerges from working with
-   real data, not from authoring JSON by hand.
+   real data.
 
 2. **Eval Runner** — async, queue-backed (Celery + Redis), deterministic,
    plugin-extensible. Strict typing, clean public API, machine- and
