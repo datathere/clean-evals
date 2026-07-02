@@ -28,6 +28,8 @@ evaluation data stored in your own environment.
    the [comparison math](concepts/recommendations.md), plus per-case
    heatmaps and cost projections.
 
+![A completed eval run: leaderboard and model recommendations](assets/decision-ui.png)
+
 ## Quick start
 
 ```bash

@@ -242,6 +242,8 @@ by the calibrated judge or exact match. The Decision UI shows:
   to the full input/golden/answer view.
 - **Cost projection** — monthly cost at your real traffic volume.
 
+![Eval results: per-case heatmap and failed cases with expected and actual answers](assets/eval-results.png)
+
 To evaluate a new model later, add it and rerun stage 5 against the same
 locked dataset and judge. Scores remain comparable because the dataset and
 judge configuration are unchanged.
