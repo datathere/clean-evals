@@ -51,6 +51,12 @@ class ProviderProbe:
 
 
 def _endpoints(api_key: str) -> dict[str, tuple[str, dict[str, str]]]:
+    # For the local provider the configured value is a base URL, not a key;
+    # an optional bearer token comes from CLEAN_EVALS_LOCAL_API_KEY.
+    local_headers: dict[str, str] = {}
+    local_token = os.environ.get("CLEAN_EVALS_LOCAL_API_KEY", "").strip()
+    if local_token:
+        local_headers["authorization"] = f"Bearer {local_token}"
     return {
         "anthropic": (
             "https://api.anthropic.com/v1/models?limit=100",
@@ -67,6 +73,10 @@ def _endpoints(api_key: str) -> dict[str, tuple[str, dict[str, str]]]:
         "openrouter": (
             "https://openrouter.ai/api/v1/key",
             {"authorization": f"Bearer {api_key}"},
+        ),
+        "local": (
+            f"{api_key.rstrip('/')}/models",
+            local_headers,
         ),
     }
 
@@ -93,6 +103,16 @@ def _parse_models(provider: str, body: Any) -> tuple[str, ...]:
             if "generateContent" not in (m.get("supportedGenerationMethods") or []):
                 continue
             ids.append(str(m.get("name", "")).removeprefix("models/"))
+    elif provider == "local":
+        # OpenAI-compatible /models. Ids are prefixed so the catalog offers
+        # them in routable form (local/llama3.2), and the dated-snapshot
+        # exclusion below does not apply — local models are pinned on disk.
+        ids = [
+            f"local/{mid}"
+            for m in body.get("data", [])
+            if isinstance(m, dict) and (mid := m.get("id", ""))
+        ]
+        return tuple(sorted(ids))
     # Floating aliases are rejected by RunConfig; do not offer them.
     return tuple(sorted(i for i in ids if i and not i.endswith("-latest")))
 

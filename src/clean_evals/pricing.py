@@ -87,15 +87,19 @@ _PROVIDER_PREFIXES: tuple[tuple[str, str], ...] = (
     ("gpt-", "openai"),
     ("o1", "openai"),
     ("gemini-", "google"),
+    # OpenAI-compatible local endpoints (Ollama, LM Studio, vLLM, ...).
+    ("local/", "local"),
 )
 
 # Which environment variable connects each provider. Used by the model
 # catalog endpoint so the UI can show real availability, and by docs.
+# The local provider is configured by a base URL rather than a key.
 PROVIDER_ENV_VARS: dict[str, str] = {
     "anthropic": "ANTHROPIC_API_KEY",
     "openai": "OPENAI_API_KEY",
     "google": "GOOGLE_API_KEY",
     "openrouter": "OPENROUTER_API_KEY",
+    "local": "CLEAN_EVALS_LOCAL_BASE_URL",
 }
 
 

@@ -34,6 +34,7 @@ from clean_evals.errors import (
     ProviderTimeout,
     RateLimited,
     SchemaInvalidResponse,
+    UnknownPlugin,
 )
 from clean_evals.models import (
     Case,
@@ -299,7 +300,12 @@ class Runner:
             )
         )
 
-        adapter = await self._get_adapter(provider)
+        try:
+            adapter = await self._get_adapter(provider)
+        except UnknownPlugin as exc:
+            # Failure is data: a provider with no registered adapter fails
+            # its own cases instead of crashing the run.
+            return _failed_case(case.id, model, status="error", reason=str(exc))
         request = self._assemble_request(case, dataset)
         started_at = now()
 

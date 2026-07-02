@@ -15,6 +15,13 @@ from pathlib import Path
 from clean_evals.models import Case, CaseResult
 
 
+def _safe(fragment: str) -> str:
+    """A path-safe filename fragment. Model ids can carry ``/`` (local/,
+    OpenRouter slugs) and ``:`` (Ollama tags), which are invalid in
+    filenames."""
+    return fragment.replace("/", "_").replace(":", "_").replace("\\", "_")
+
+
 def write_case_diff(
     case: Case,
     case_result: CaseResult,
@@ -22,8 +29,7 @@ def write_case_diff(
 ) -> Path:
     """Write a Markdown diff file for one case. Returns the path written."""
     output_dir.mkdir(parents=True, exist_ok=True)
-    safe_id = case.id.replace("/", "_").replace(":", "_")
-    path = output_dir / f"case_{safe_id}__{case_result.model}.diff.md"
+    path = output_dir / f"case_{_safe(case.id)}__{_safe(case_result.model)}.diff.md"
 
     expected_text = json.dumps(case.expected or {}, indent=2, ensure_ascii=False, sort_keys=True)
     actual_text = ""

@@ -50,6 +50,10 @@ def capabilities(provider: str, model: str) -> ModelCapabilities:
         return ModelCapabilities(supports_seed=True)
     if provider == "openrouter":
         return ModelCapabilities(supports_seed=True, reasoning_efforts=REASONING_EFFORTS)
+    if provider == "local":
+        # OpenAI-compatible servers accept seed; servers that do not simply
+        # ignore the parameter.
+        return ModelCapabilities(supports_seed=True)
     if provider == "anthropic" and _ANTHROPIC_NO_TEMPERATURE.match(model):
         return ModelCapabilities(supports_temperature=False)
     # anthropic (older families), google: temperature and max tokens.

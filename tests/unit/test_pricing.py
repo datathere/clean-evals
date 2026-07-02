@@ -49,6 +49,8 @@ def test_infer_provider_known_prefixes() -> None:
     assert infer_provider("gpt-4o-2024-11-20") == "openai"
     assert infer_provider("o1-2024-12-17") == "openai"
     assert infer_provider("gemini-1.5-pro-002") == "google"
+    assert infer_provider("local/llama3.2") == "local"
+    assert infer_provider("local/qwen2.5-coder:14b") == "local"
 
 
 def test_infer_provider_unknown() -> None:

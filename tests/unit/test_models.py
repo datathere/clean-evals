@@ -53,6 +53,12 @@ def test_run_config_rejects_floating_alias() -> None:
     RunConfig(models=["gpt-4o-2024-11-20"])
 
 
+def test_run_config_exempts_local_models_from_alias_rule() -> None:
+    """local/ models are pinned by the file on disk, so any tag is valid."""
+    RunConfig(models=["local/llama3.2:latest"])
+    RunConfig(models=["local/some-model-latest"])
+
+
 def test_run_config_temperature_bounds() -> None:
     RunConfig(models=["m-2024-01-01"], temperature=0.0)
     RunConfig(models=["m-2024-01-01"], temperature=2.0)

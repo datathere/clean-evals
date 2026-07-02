@@ -184,3 +184,34 @@ def test_dataclass_timestamps_are_utc() -> None:
     )
     finished = datetime.now(UTC)
     assert started <= result.started_at <= result.finished_at <= finished
+
+
+@pytest.mark.asyncio
+async def test_unregistered_adapter_fails_cases_without_crashing_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A provider with no registered adapter yields error results for its
+    own cases; the other model's cases still complete."""
+    from clean_evals import runner as runner_module
+    from clean_evals.errors import UnknownPlugin
+
+    class _EmptyRegistry:
+        def get(self, name: str) -> type:
+            raise UnknownPlugin(f"No adapter registered as {name!r}.")
+
+    monkeypatch.setattr(runner_module, "adapter_registry", _EmptyRegistry())
+    model = "claude-3-5-sonnet-20241022"
+    fake = _FakeAdapter(outputs={"p0": {model: "want0"}, "p1": {model: "want1"}})
+    runner = Runner(adapters={"anthropic": fake})
+    result = await runner.run(
+        _ds(),
+        RunConfig(models=["local/llama3.2", model], retries=0, max_cost_usd=10),
+    )
+    by_model = {r.model: [c for c in result.cases if c.model == r.model] for r in result.cases}
+    local_cases = by_model["local/llama3.2"]
+    hosted_cases = by_model[model]
+    assert len(local_cases) == 2
+    assert all(c.status == "error" for c in local_cases)
+    assert all(c.error and "No adapter registered" in c.error for c in local_cases)
+    assert len(hosted_cases) == 2
+    assert all(c.status == "ok" for c in hosted_cases)

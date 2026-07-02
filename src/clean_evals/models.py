@@ -324,6 +324,10 @@ class RunConfig(_StrictModel):
         if not v:
             raise ValueError("RunConfig.models must contain at least one model")
         for m in v:
+            # local/ models are pinned by the file on disk; the dated-snapshot
+            # rule exists for hosted providers whose aliases move.
+            if m.startswith("local/"):
+                continue
             if m.endswith("-latest") or m == "latest":
                 raise ValueError(
                     f"Floating alias {m!r} rejected. clean-evals requires dated snapshot ids."

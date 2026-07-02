@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+- `local` adapter for OpenAI-compatible endpoints (Ollama, LM Studio,
+  llama.cpp server, vLLM, and hosted gateways). Model ids use the
+  `local/` prefix (`local/llama3.2`); configure with
+  `CLEAN_EVALS_LOCAL_BASE_URL` (defaults to Ollama's
+  `http://localhost:11434/v1`) and optional `CLEAN_EVALS_LOCAL_API_KEY`.
+  The Models page lists installed local models when the server is
+  reachable, local runs cost $0.00 unless a pricing override is set, and
+  the dated-snapshot rule does not apply to `local/` ids.
 
 ## [0.1.1] - 2026-07-02
 

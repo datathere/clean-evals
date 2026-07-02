@@ -87,6 +87,7 @@ anthropic = "clean_evals.adapters.anthropic:AnthropicAdapter"
 openai = "clean_evals.adapters.openai:OpenAIAdapter"
 google = "clean_evals.adapters.google:GoogleAdapter"
 openrouter = "clean_evals.adapters.openrouter:OpenRouterAdapter"
+local = "clean_evals.adapters.local:LocalAdapter"
 
 [project.entry-points."clean_evals.scorers"]
 exact_match = "clean_evals.scorers.exact_match:ExactMatchScorer"

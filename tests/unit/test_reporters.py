@@ -119,3 +119,24 @@ def test_case_diff_writes_markdown(tmp_path: Path) -> None:
     assert "## Expected" in body
     assert "## Actual" in body
     assert "value mismatch" in body
+
+
+def test_case_diff_sanitizes_model_ids_in_filenames(tmp_path: Path) -> None:
+    """local/ and OpenRouter model ids carry / and : — invalid in filenames."""
+    case = Case(id="c1", input={"prompt": "hello"}, expected={"x": 1})
+    cr = CaseResult(
+        case_id="c1",
+        model="local/smollm2:135m",
+        status="error",
+        response=None,
+        score=None,
+        error="boom",
+        started_at=datetime.now(UTC),
+        finished_at=datetime.now(UTC),
+    )
+    p = write_case_diff(case, cr, tmp_path)
+    assert p.exists()
+    assert p.parent == tmp_path
+    assert "/" not in p.name
+    assert ":" not in p.name
+    assert "local/smollm2:135m" in p.read_text(encoding="utf-8")

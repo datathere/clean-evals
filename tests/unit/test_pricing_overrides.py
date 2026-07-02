@@ -73,6 +73,20 @@ def test_parse_models_filters_noise() -> None:
     assert _parse_models("google", google_body) == ("gemini-2.0-flash-001",)
 
 
+def test_parse_models_local_prefixes_ids_and_keeps_latest_tags() -> None:
+    local_body = {
+        "data": [
+            {"id": "llama3.2:latest"},
+            {"id": "qwen2.5-coder:14b"},
+            {"id": ""},
+        ]
+    }
+    assert _parse_models("local", local_body) == (
+        "local/llama3.2:latest",
+        "local/qwen2.5-coder:14b",
+    )
+
+
 def test_feed_parsers_convert_per_token_to_per_mtok() -> None:
     litellm = _parse_litellm(
         {

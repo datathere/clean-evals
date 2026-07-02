@@ -13,6 +13,7 @@ import pytest
 
 from clean_evals.adapters.anthropic import AnthropicAdapter
 from clean_evals.adapters.google import GoogleAdapter
+from clean_evals.adapters.local import LocalAdapter
 from clean_evals.adapters.openai import OpenAIAdapter
 from clean_evals.adapters.openrouter import OpenRouterAdapter
 from clean_evals.errors import ProviderError, RateLimited
@@ -299,3 +300,121 @@ async def test_openrouter_uses_provider_cost() -> None:
     )
     await adapter.aclose()
     assert resp.cost_usd == 0.0123
+
+
+# ---------------------------------------------------------------------------
+# Local (OpenAI-compatible endpoints)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_local_happy_path_strips_prefix_and_costs_zero() -> None:
+    payload = {
+        "choices": [{"message": {"role": "assistant", "content": "hi"}}],
+        "usage": {"prompt_tokens": 12, "completion_tokens": 4},
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url) == "http://gpu-box:8000/v1/chat/completions"
+        body = json.loads(request.content)
+        # The local/ routing prefix never reaches the server.
+        assert body["model"] == "llama3.2"
+        assert body["temperature"] == 0.0
+        assert body["seed"] == 7
+        # No token configured: no authorization header.
+        assert "authorization" not in request.headers
+        return httpx.Response(200, json=payload)
+
+    adapter = LocalAdapter(
+        base_url="http://gpu-box:8000/v1", client=_client(httpx.MockTransport(handler))
+    )
+    resp = await adapter.complete(
+        prompt="x", model="local/llama3.2", temperature=0.0, seed=7, timeout_s=5
+    )
+    await adapter.aclose()
+    assert resp.content == "hi"
+    assert resp.tokens_in == 12
+    assert resp.tokens_out == 4
+    assert resp.cost_usd == 0.0
+
+
+@pytest.mark.asyncio
+async def test_local_sends_bearer_token_when_configured() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["authorization"] == "Bearer sk-local"
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}], "usage": {}})
+
+    adapter = LocalAdapter(
+        base_url="http://localhost:1234/v1",
+        api_key="sk-local",
+        client=_client(httpx.MockTransport(handler)),
+    )
+    resp = await adapter.complete(
+        prompt="x", model="local/qwen2.5-coder:14b", temperature=0.0, seed=None, timeout_s=5
+    )
+    await adapter.aclose()
+    assert resp.content == "ok"
+
+
+@pytest.mark.asyncio
+async def test_local_defaults_to_ollama_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CLEAN_EVALS_LOCAL_BASE_URL", raising=False)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url) == "http://localhost:11434/v1/chat/completions"
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}], "usage": {}})
+
+    adapter = LocalAdapter(client=_client(httpx.MockTransport(handler)))
+    await adapter.complete(
+        prompt="x", model="local/llama3.2", temperature=0.0, seed=None, timeout_s=5
+    )
+    await adapter.aclose()
+
+
+@pytest.mark.asyncio
+async def test_local_json_mode_parses_content() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["response_format"] == {"type": "json_object"}
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": '{"label": "billing"}'}}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 5},
+            },
+        )
+
+    adapter = LocalAdapter(
+        base_url="http://localhost:11434/v1", client=_client(httpx.MockTransport(handler))
+    )
+    resp = await adapter.complete(
+        prompt="x",
+        model="local/llama3.2",
+        temperature=0.0,
+        seed=None,
+        timeout_s=5,
+        response_format="json",
+    )
+    await adapter.aclose()
+    assert resp.parsed == {"label": "billing"}
+
+
+@pytest.mark.asyncio
+async def test_local_accepts_latest_style_tags() -> None:
+    """Ollama's default tag is :latest; the dated-snapshot rule is hosted-only."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["model"] == "llama3.2:latest"
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}], "usage": {}})
+
+    adapter = LocalAdapter(
+        base_url="http://localhost:11434/v1", client=_client(httpx.MockTransport(handler))
+    )
+    resp = await adapter.complete(
+        prompt="x", model="local/llama3.2:latest", temperature=0.0, seed=None, timeout_s=5
+    )
+    await adapter.aclose()
+    assert resp.content == "ok"

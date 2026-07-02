@@ -13,7 +13,8 @@ across models. It runs as its own process — a CLI plus a local web UI — and 
 own data. You bring the prompts and inputs your application sends to a model;
 clean-evals measures which model answers them best and what that costs.
 Anthropic, OpenAI, Google, and OpenRouter models are supported out of the
-box, and anything else through an adapter plugin.
+box, local models through any OpenAI-compatible server (Ollama, LM Studio,
+llama.cpp, vLLM), and anything else through an adapter plugin.
 
 > **clean-evals is a local tool.** It has no authentication and is designed to
 > run on your own machine, bound to localhost. Do not deploy it to a public
