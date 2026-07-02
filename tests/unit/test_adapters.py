@@ -418,3 +418,28 @@ async def test_local_accepts_latest_style_tags() -> None:
     )
     await adapter.aclose()
     assert resp.content == "ok"
+
+
+@pytest.mark.asyncio
+async def test_local_sends_system_message_and_prompt() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["messages"] == [
+            {"role": "system", "content": "You are a classifier."},
+            {"role": "user", "content": "Context here.\n\nThe ticket."},
+        ]
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}], "usage": {}})
+
+    adapter = LocalAdapter(
+        base_url="http://localhost:11434/v1", client=_client(httpx.MockTransport(handler))
+    )
+    resp = await adapter.complete(
+        prompt="Context here.\n\nThe ticket.",
+        model="local/llama3.2",
+        temperature=0.0,
+        seed=None,
+        timeout_s=5,
+        system="You are a classifier.",
+    )
+    await adapter.aclose()
+    assert resp.content == "ok"
