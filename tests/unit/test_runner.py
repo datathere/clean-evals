@@ -215,3 +215,43 @@ async def test_unregistered_adapter_fails_cases_without_crashing_run(
     assert all(c.error and "No adapter registered" in c.error for c in local_cases)
     assert len(hosted_cases) == 2
     assert all(c.status == "ok" for c in hosted_cases)
+
+
+@pytest.mark.asyncio
+async def test_candidate_generation_aborts_on_cost_ceiling(sqlite_engine) -> None:
+    """generate_candidates records aborted_cost when spend crosses the ceiling."""
+    from clean_evals import jobs as jobs_module
+    from clean_evals.candidates import generate_candidates
+    from clean_evals.storage.db import CaseRow, DatasetRow, session_factory
+
+    factory = session_factory()
+    with factory() as session:
+        ds = DatasetRow(name="cc", version="v1", scorer="exact_match", scorer_config={})
+        session.add(ds)
+        session.flush()
+        for i in range(4):
+            session.add(
+                CaseRow(dataset_id=ds.id, case_id_external=f"c{i}", input_jsonb={"prompt": "hi"})
+            )
+        session.commit()
+        dataset_id = ds.id
+
+    class _PricyAdapter:
+        provider = "anthropic"
+
+        async def complete(self, prompt, model, **kw):  # type: ignore[no-untyped-def]
+            return ModelResponse(content="x", latency_ms=1, cost_usd=1.0)
+
+    job = await generate_candidates(
+        factory,
+        dataset_id,
+        ["claude-3-5-sonnet-20241022"],
+        max_cost_usd=1.5,
+        concurrency=1,
+        adapters={"anthropic": _PricyAdapter()},
+    )
+    assert job.status == "aborted_cost"
+    assert job.detail is not None
+    row = jobs_module.latest(factory(), kind=jobs_module.GENERATION, dataset_id=dataset_id)
+    assert row is not None
+    assert row.status == "aborted_cost"

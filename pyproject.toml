@@ -204,11 +204,15 @@ addopts = [
     "--cov=clean_evals",
     "--cov-report=term-missing",
     "--cov-report=xml",
+    # Unit runs are the default and stay fast + offline. The integration
+    # job opts in with `-m integration --override-ini addopts=...`.
+    "-m",
+    "not integration",
 ]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
-    "integration: integration tests requiring docker-compose services",
+    "integration: integration tests exercising the DB, queue, and web flow end to end",
     "slow: tests that take >1s",
 ]
 
@@ -221,9 +225,10 @@ parallel = true
 source = ["src/clean_evals", "*/site-packages/clean_evals"]
 
 [tool.coverage.report]
-# Floor for v0.1. Ratchet to 80 once docker-compose-backed integration
-# tests cover Celery tasks, Alembic migrations, and the full web flow.
-fail_under = 60
+# The unit matrix uses this floor for fast per-Python feedback; the CI
+# `integration` job runs the full suite (unit + integration) and enforces
+# 80 via --cov-fail-under. Keep the two in the same ballpark.
+fail_under = 70
 show_missing = true
 skip_empty = true
 exclude_lines = [

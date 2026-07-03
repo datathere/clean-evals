@@ -473,7 +473,7 @@ def migrate(
 
 
 @app.command()
-def worker(
+def worker(  # pragma: no cover — starts a blocking Celery worker
     concurrency: Annotated[int, typer.Option("--concurrency", "-c")] = 2,
     loglevel: Annotated[str, typer.Option("--loglevel")] = "INFO",
 ) -> None:
@@ -491,7 +491,7 @@ def worker(
 
 
 @app.command()
-def beat(
+def beat(  # pragma: no cover — starts a blocking Celery Beat scheduler
     loglevel: Annotated[str, typer.Option("--loglevel")] = "INFO",
 ) -> None:
     """Start the Celery Beat scheduler with the DB-backed schedule."""
@@ -503,7 +503,7 @@ def beat(
 
 
 @app.command()
-def serve(
+def serve(  # pragma: no cover — starts a blocking uvicorn server
     host: Annotated[str, typer.Option("--host")] = "127.0.0.1",
     port: Annotated[int, typer.Option("--port")] = 8080,
     reload: Annotated[bool, typer.Option("--reload")] = False,

@@ -58,6 +58,31 @@ jobs:
           name: coverage-${{ matrix.python }}
           path: coverage.xml
 
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev,postgres]"
+      # Runs unit + integration together (the fake OpenAI-compatible server
+      # is stdlib, no service needed) and enforces the 80% coverage floor
+      # on the full suite. `-m "..."` overrides the default "not integration".
+      - name: Full suite with coverage floor
+        env:
+          CELERY_BROKER_URL: redis://localhost:6379/0
+          CELERY_RESULT_BACKEND: redis://localhost:6379/0
+        run: pytest -ra -m "integration or not integration" --cov-fail-under=80
+
   examples-load:
     runs-on: ubuntu-latest
     steps:
@@ -127,7 +152,7 @@ jobs:
 
   build-wheel:
     runs-on: ubuntu-latest
-    needs: [lint-and-types, tests, frontend, e2e]
+    needs: [lint-and-types, tests, integration, frontend, e2e]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
