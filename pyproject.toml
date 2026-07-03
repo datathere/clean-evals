@@ -14,7 +14,7 @@ authors = [
 keywords = ["ai", "evals", "llm", "evaluation", "benchmark", "anthropic", "openai"]
 requires-python = ">=3.11"
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: GNU Affero General Public License v3",
     "Operating System :: OS Independent",
