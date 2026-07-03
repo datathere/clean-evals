@@ -13,13 +13,13 @@ from __future__ import annotations
 import json
 import logging
 import tempfile
-import threading
-from dataclasses import dataclass
+import time
 from pathlib import Path
 
 from sqlalchemy import select
 
-from clean_evals._internal.events import EventSink
+from clean_evals import jobs
+from clean_evals._internal.events import EventSink, RunEvent
 from clean_evals.models import Case, Dataset, RunConfig
 from clean_evals.protocols import ModelAdapter
 from clean_evals.registry import reporters
@@ -111,37 +111,43 @@ def execute_run(
 # ---------------------------------------------------------------------------
 # Inline-run tracking (web API's no-queue mode)
 # ---------------------------------------------------------------------------
+#
+# State lives in the ``jobs`` table (kind="inline_run") so it survives
+# server restarts and is shared across worker processes. The runner's
+# event sink doubles as the heartbeat: each finished case refreshes the
+# row's ``updated_at`` (throttled), so a long run never reads as lost.
+
+_HEARTBEAT_EVERY_S = 5.0
 
 
-@dataclass
-class InlineRunJob:
-    status: str = "running"  # running|done|error
-    run_id: str | None = None
-    detail: str | None = None
+def start_inline_job(dataset_id: int) -> int:
+    """Insert the ``running`` job row; returns the job id."""
+    return jobs.create(session_factory(), kind=jobs.INLINE_RUN, dataset_id=dataset_id)
 
 
-_inline_jobs: dict[int, InlineRunJob] = {}
-_inline_lock = threading.Lock()
-
-
-def inline_job(dataset_id: int) -> InlineRunJob | None:
-    with _inline_lock:
-        return _inline_jobs.get(dataset_id)
-
-
-def start_inline_job(dataset_id: int) -> InlineRunJob:
-    job = InlineRunJob()
-    with _inline_lock:
-        _inline_jobs[dataset_id] = job
-    return job
-
-
-def run_inline(dataset_id: int, config: RunConfig, job: InlineRunJob) -> None:
+def run_inline(
+    dataset_id: int,
+    config: RunConfig,
+    job_id: int,
+    *,
+    event_sink: EventSink | None = None,
+) -> None:
     """Blocking body for the web API's background thread."""
+    factory = session_factory()
+    last_beat = time.monotonic()
+
+    def sink(event: RunEvent) -> None:
+        nonlocal last_beat
+        if event_sink is not None:
+            event_sink(event)
+        now = time.monotonic()
+        if now - last_beat >= _HEARTBEAT_EVERY_S:
+            last_beat = now
+            jobs.update(factory, job_id)
+
     try:
-        job.run_id = execute_run(dataset_id, config, triggered_by="web")
-        job.status = "done"
+        run_id = execute_run(dataset_id, config, triggered_by="web", event_sink=sink)
+        jobs.update(factory, job_id, status="done", run_id=run_id)
     except Exception as exc:
         _log.warning("inline run for dataset %s failed: %s", dataset_id, exc)
-        job.status = "error"
-        job.detail = str(exc)
+        jobs.update(factory, job_id, status="error", detail=str(exc))

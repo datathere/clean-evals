@@ -16,8 +16,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from clean_evals import jobs
 from clean_evals.calibration import calibrate
-from clean_evals.candidates import GenerationJob, current_job, generate_candidates
+from clean_evals.candidates import GenerationJob, generate_candidates
 from clean_evals.models import ModelParams
 from clean_evals.prompting import assemble
 from clean_evals.storage.db import (
@@ -176,17 +177,26 @@ def start_generation(
         raise HTTPException(status_code=404, detail="dataset not found")
     if not ds.cases:
         raise HTTPException(status_code=400, detail="dataset has no cases")
-    job = current_job(dataset_id)
-    if job is not None and job.status == "running":
+    factory = session_factory()
+    row = jobs.mark_lost_if_stale(
+        factory, jobs.latest(session, kind=jobs.GENERATION, dataset_id=dataset_id)
+    )
+    if row is not None and row.status == "running":
         return GenerationStatusOut(
-            status=job.status,
-            total=job.total,
-            done=job.done,
-            errors=job.errors,
-            cost_usd=job.cost_usd,
+            status=row.status,
+            total=row.total,
+            done=row.done,
+            errors=row.errors,
+            cost_usd=row.cost_usd,
         )
 
-    new_job = GenerationJob(dataset_id=dataset_id, models=list(payload.models))
+    job_id = jobs.create(
+        factory,
+        kind=jobs.GENERATION,
+        dataset_id=dataset_id,
+        total=len(ds.cases) * len(payload.models),
+    )
+    new_job = GenerationJob(dataset_id=dataset_id, models=list(payload.models), job_id=job_id)
 
     model_params = {
         model: ModelParams(**params.model_dump()) for model, params in payload.model_params.items()
@@ -208,6 +218,7 @@ def start_generation(
             if new_job.status == "running":
                 new_job.status = "error"
                 new_job.detail = str(exc)
+            jobs.update(session_factory(), job_id, status=new_job.status, detail=new_job.detail)
 
     background.add_task(run)
     return GenerationStatusOut(status="running", total=len(ds.cases) * len(payload.models))
@@ -225,16 +236,18 @@ def generation_status(
             .where(CaseRow.dataset_id == dataset_id)
         ).all()
     )
-    job = current_job(dataset_id)
-    if job is None:
+    row = jobs.mark_lost_if_stale(
+        session_factory(), jobs.latest(session, kind=jobs.GENERATION, dataset_id=dataset_id)
+    )
+    if row is None:
         return GenerationStatusOut(status="idle", candidate_count=count)
     return GenerationStatusOut(
-        status=job.status,
-        total=job.total,
-        done=job.done,
-        errors=job.errors,
-        cost_usd=job.cost_usd,
-        detail=job.detail,
+        status=row.status,
+        total=row.total,
+        done=row.done,
+        errors=row.errors,
+        cost_usd=row.cost_usd,
+        detail=row.detail,
         candidate_count=count,
     )
 

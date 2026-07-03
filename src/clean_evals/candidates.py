@@ -13,13 +13,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import threading
 from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from clean_evals import jobs
 from clean_evals.errors import CostCeilingExceeded
 from clean_evals.models import ModelParams
 from clean_evals.pricing import infer_provider
@@ -33,31 +33,22 @@ _log = logging.getLogger(__name__)
 
 @dataclass
 class GenerationJob:
-    """Progress of one candidate-generation pass, pollable from the API."""
+    """Progress of one candidate-generation pass.
+
+    Mirrored to the ``jobs`` table (``job_id``) so status survives server
+    restarts and is visible across worker processes; the API polls the
+    table, never this object.
+    """
 
     dataset_id: int
     models: list[str]
+    job_id: int | None = None
     total: int = 0
     done: int = 0
     errors: int = 0
     cost_usd: float = 0.0
     status: str = "running"  # running|done|error|aborted_cost
     detail: str | None = None
-
-
-_jobs: dict[int, GenerationJob] = {}
-_jobs_lock = threading.Lock()
-
-
-def current_job(dataset_id: int) -> GenerationJob | None:
-    """Return the most recent generation job for a dataset, if any."""
-    with _jobs_lock:
-        return _jobs.get(dataset_id)
-
-
-def _register_job(job: GenerationJob) -> None:
-    with _jobs_lock:
-        _jobs[job.dataset_id] = job
 
 
 @dataclass
@@ -116,7 +107,25 @@ async def generate_candidates(
     if job is None:
         job = GenerationJob(dataset_id=dataset_id, models=list(models))
     job.total = len(cases) * len(models)
-    _register_job(job)
+    if job.job_id is None:
+        job.job_id = jobs.create(
+            session_factory, kind=jobs.GENERATION, dataset_id=dataset_id, total=job.total
+        )
+    else:
+        jobs.update(session_factory, job.job_id, total=job.total)
+
+    def flush() -> None:
+        assert job is not None
+        assert job.job_id is not None
+        jobs.update(
+            session_factory,
+            job.job_id,
+            status=job.status,
+            done=job.done,
+            errors=job.errors,
+            cost_usd=job.cost_usd,
+            detail=job.detail,
+        )
 
     adapter_cache: dict[str, ModelAdapter] = dict(adapters or {})
 
@@ -187,6 +196,7 @@ async def generate_candidates(
             )
         results.append(row)
         job.done += 1
+        flush()
 
     tasks = [
         asyncio.create_task(one(case_pk, case_ext, case_input, model))
@@ -208,6 +218,7 @@ async def generate_candidates(
         _persist(session_factory, results)
         if job.status == "running":
             job.status = "done"
+        flush()
 
     return job
 

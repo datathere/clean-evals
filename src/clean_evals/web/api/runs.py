@@ -13,8 +13,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from clean_evals import jobs
 from clean_evals._internal.recommendations import all_three
-from clean_evals.eval_service import inline_job, run_inline, start_inline_job
+from clean_evals.eval_service import run_inline, start_inline_job
 from clean_evals.models import RunConfig
 from clean_evals.storage.artifacts import build_artifact_store
 from clean_evals.storage.db import CaseResultRow, CaseRow, RunRow
@@ -167,7 +168,11 @@ def cost_projection(
 
 
 @router.post("", response_model=TriggerRunOut, status_code=202)
-def trigger_run(body: TriggerRunIn, background: BackgroundTasks) -> TriggerRunOut:
+def trigger_run(
+    body: TriggerRunIn,
+    background: BackgroundTasks,
+    session: Annotated[Session, Depends(get_session)],
+) -> TriggerRunOut:
     """Start an eval run.
 
     ``mode="inline"`` (default) runs in-process — nothing beyond the web
@@ -187,20 +192,32 @@ def trigger_run(body: TriggerRunIn, background: BackgroundTasks) -> TriggerRunOu
         )
         return TriggerRunOut(mode="queue", task_id=async_result.id)
 
-    existing = inline_job(body.dataset_id)
+    from clean_evals.storage.db import session_factory
+
+    existing = jobs.mark_lost_if_stale(
+        session_factory(),
+        jobs.latest(session, kind=jobs.INLINE_RUN, dataset_id=body.dataset_id),
+    )
     if existing is not None and existing.status == "running":
         raise HTTPException(status_code=409, detail="a run is already in progress")
-    job = start_inline_job(body.dataset_id)
-    background.add_task(run_inline, body.dataset_id, config, job)
+    job_id = start_inline_job(body.dataset_id)
+    background.add_task(run_inline, body.dataset_id, config, job_id)
     return TriggerRunOut(mode="inline")
 
 
 @router.get("/inline-status/{dataset_id}", response_model=InlineRunStatusOut)
-def inline_run_status(dataset_id: int) -> InlineRunStatusOut:
-    job = inline_job(dataset_id)
-    if job is None:
+def inline_run_status(
+    dataset_id: int,
+    session: Annotated[Session, Depends(get_session)],
+) -> InlineRunStatusOut:
+    from clean_evals.storage.db import session_factory
+
+    row = jobs.mark_lost_if_stale(
+        session_factory(), jobs.latest(session, kind=jobs.INLINE_RUN, dataset_id=dataset_id)
+    )
+    if row is None:
         return InlineRunStatusOut(status="idle")
-    return InlineRunStatusOut(status=job.status, run_id=job.run_id, detail=job.detail)
+    return InlineRunStatusOut(status=row.status, run_id=row.run_id, detail=row.detail)
 
 
 @router.get("/{run_id}/artifacts/{name}")

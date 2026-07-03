@@ -251,6 +251,40 @@ class ScheduleRow(Base):
     dataset: Mapped[DatasetRow] = relationship("DatasetRow", back_populates="schedules")
 
 
+class JobRow(Base):
+    """Background-work state for the web layer's in-process jobs.
+
+    Candidate generation and inline eval runs execute in server-side
+    background tasks; their progress lives here so status survives server
+    restarts and is visible to all worker processes. ``updated_at`` is the
+    heartbeat: a ``running`` row whose heartbeat has gone stale belongs to
+    a dead process.
+    """
+
+    __tablename__ = "jobs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(20), index=True)  # generation | inline_run
+    dataset_id: Mapped[int] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), default="running", nullable=False
+    )  # running|done|error|aborted_cost
+    total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    done: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    errors: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    run_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    detail: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+
 # ---------------------------------------------------------------------------
 # Engine / session helpers
 # ---------------------------------------------------------------------------
