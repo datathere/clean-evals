@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.0] - 2026-07-02
+
 ### Added
 - `local` adapter for OpenAI-compatible endpoints (Ollama, LM Studio,
   llama.cpp server, vLLM, and hosted gateways). Model ids use the
@@ -16,6 +20,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The Models page lists installed local models when the server is
   reachable, local runs cost $0.00 unless a pricing override is set, and
   the dated-snapshot rule does not apply to `local/` ids.
+- Clicking a dataset row opens the case editor; the run detail page has
+  a Re-run button that repeats the run with the same dataset version and
+  config; unknown URLs render a not-found page.
+
+### Fixed
+- Provider inference covers the whole OpenAI o-series (`o3`, `o3-mini`,
+  `o4-mini`); previously only `o1*` routed.
+- A provider with no registered adapter fails its own cases with
+  `status="error"` instead of crashing the run.
+- Per-case diff filenames sanitize `/` and `:` in model ids (local/
+  prefixes, Ollama tags, OpenRouter slugs).
+
+### Changed
+- The Dataset Builder nav item is removed; the Datasets page owns
+  dataset creation and editing.
 
 ## [0.1.1] - 2026-07-02
 
@@ -109,6 +128,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions CI: lint, mypy --strict, pytest 3.11/3.12/3.13, examples,
   PyPI publish on tag, docs deploy on tag.
 
-[Unreleased]: https://github.com/datathere/clean-evals/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/datathere/clean-evals/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/datathere/clean-evals/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/datathere/clean-evals/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/datathere/clean-evals/releases/tag/v0.1.0
