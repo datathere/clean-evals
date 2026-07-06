@@ -21,7 +21,7 @@ llama.cpp, vLLM), and anything else through an adapter plugin.
 > host or expose its ports to a network you do not fully trust. See
 > [Disclaimers](#disclaimers).
 
-Its capabilities, in order of importance:
+Capabilities:
 
 1. **Dataset Builder.** Upload your inputs, generate outputs from candidate
    models, pick or edit the best output, and lock it as the expected

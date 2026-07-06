@@ -12,7 +12,7 @@ models.
 clean-evals runs locally through a CLI and web interface, with
 evaluation data stored in your own environment.
 
-## Capabilities, in order of importance
+## Capabilities
 
 1. **[Dataset Builder](guides/dataset-builder.md)** — upload inputs,
    generate outputs from candidate models, pick or edit the best output,
