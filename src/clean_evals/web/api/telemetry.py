@@ -88,6 +88,26 @@ def _scrubber_name() -> str | None:
     return os.environ.get("CLEAN_EVALS_TELEMETRY_SCRUBBER", "").strip() or None
 
 
+def _ingest_and_respond(
+    session: Session, items: list[Any], background: BackgroundTasks
+) -> TelemetryIngestOut:
+    """Shared tail of both ingest routes: persist, commit, schedule, report."""
+    try:
+        result = telemetry_service.ingest_items(session, items)
+    except ValueError as exc:  # misconfigured scrubber must fail loudly
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    # Commit before scheduling: the background pass opens its own session
+    # and must see these rows regardless of dependency-teardown ordering.
+    session.commit()
+    background.add_task(_derive_in_background)
+    return TelemetryIngestOut(
+        accepted=result.accepted,
+        duplicates=result.duplicates,
+        rejected=[TelemetryRejectionOut(**r) for r in result.rejected],
+        scrubber=_scrubber_name(),
+    )
+
+
 async def _derive_in_background() -> None:
     try:
         await telemetry_service.derive_pending(session_factory())
@@ -115,20 +135,7 @@ def ingest_interactions(
     """
     if not payload:
         raise HTTPException(status_code=400, detail="empty batch")
-    try:
-        result = telemetry_service.ingest_items(session, payload)
-    except ValueError as exc:  # misconfigured scrubber must fail loudly
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-    # Commit before scheduling: the background pass opens its own session
-    # and must see these rows regardless of dependency-teardown ordering.
-    session.commit()
-    background.add_task(_derive_in_background)
-    return TelemetryIngestOut(
-        accepted=result.accepted,
-        duplicates=result.duplicates,
-        rejected=[TelemetryRejectionOut(**r) for r in result.rejected],
-        scrubber=_scrubber_name(),
-    )
+    return _ingest_and_respond(session, payload, background)
 
 
 @router.post("/upload", response_model=TelemetryIngestOut, status_code=202)
@@ -154,18 +161,7 @@ async def upload_interactions(
             ) from exc
     if not items:
         raise HTTPException(status_code=400, detail="no telemetry records found")
-    try:
-        result = telemetry_service.ingest_items(session, items)
-    except ValueError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-    session.commit()  # see ingest_interactions
-    background.add_task(_derive_in_background)
-    return TelemetryIngestOut(
-        accepted=result.accepted,
-        duplicates=result.duplicates,
-        rejected=[TelemetryRejectionOut(**r) for r in result.rejected],
-        scrubber=_scrubber_name(),
-    )
+    return _ingest_and_respond(session, items, background)
 
 
 @router.post("/derive", response_model=TelemetryDeriveOut)
