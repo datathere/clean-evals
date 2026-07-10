@@ -46,8 +46,10 @@ clean-evals migrate
 ## Running the tests
 
 ```bash
-# Lint, types, tests
+# Lint, format, types, tests. Black is the formatter of record —
+# do not run ruff-format; the two can disagree.
 ruff check .
+black --check .
 mypy src/
 pytest
 
