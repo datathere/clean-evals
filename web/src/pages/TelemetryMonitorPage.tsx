@@ -105,7 +105,7 @@ export function TelemetryMonitorPage({ navigate }: Props) {
           <div className="grid lg:grid-cols-2 gap-6">
             <MetricChart
               title="Acceptance rate"
-              subtitle="share of exchanges whose response was usable as-is, per model"
+              subtitle="share of exchanges accepted, as-is or after edits, per model"
               rows={stats.data.series}
               value={(r) => r.acceptance_rate}
               format={(v) => formatPct(v, 0)}
