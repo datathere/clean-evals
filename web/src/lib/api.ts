@@ -10,7 +10,7 @@ export interface Dataset {
   locked_count: number;
   has_runs: boolean;
   scorer_config: Record<string, unknown>;
-  request_shape: "raw" | "templated";
+  request_shape: "raw" | "templated" | "chat";
   system_prompt: string | null;
   shared_context: string | null;
   user_template: string | null;
@@ -189,6 +189,96 @@ export interface CostProjectionRow {
   projected_monthly_usd: number;
 }
 
+export interface TelemetryExchange {
+  id: number;
+  interaction_id: string;
+  source: string;
+  dataset: string;
+  kind: "structured" | "transcript";
+  occurred_at: string;
+  outcome: string | null;
+  turn_index: number;
+  context: { role: string; text: string }[];
+  request_text: string;
+  request_input: Record<string, unknown> | null;
+  response_text: string;
+  response_parsed: Record<string, unknown> | null;
+  response_model: string;
+  alternatives: { text: string; model: string | null }[];
+  regen_count: number;
+  label: string | null;
+  verdict: "positive" | "negative" | "incomplete" | "unrated" | null;
+  rating: number | null;
+  feedback: string | null;
+  proposed_expected: Record<string, unknown> | null;
+  judge_score: number | null;
+  status: "derived" | "promoted" | "discarded";
+  promoted_case_id: number | null;
+  auto_locked: boolean;
+  spot_check: boolean;
+  spot_check_resolved: "confirmed" | "overturned" | null;
+}
+
+export interface TelemetryInbox {
+  total: number;
+  exchanges: TelemetryExchange[];
+}
+
+export interface TelemetryIngestResult {
+  accepted: number;
+  duplicates: string[];
+  rejected: { index: number; error: string }[];
+  scrubber: string | null;
+}
+
+export interface TelemetrySeriesRow {
+  date: string;
+  source: string;
+  model: string;
+  exchanges: number;
+  positive: number;
+  negative: number;
+  incomplete: number;
+  unrated: number;
+  acceptance_rate: number;
+  correction_rate: number;
+  mean_rating: number | null;
+  mean_regens: number;
+  judge_scored: number;
+  mean_judge_score: number | null;
+}
+
+export interface TelemetrySourceRow {
+  source: string;
+  interactions: number;
+  accept_rate: number;
+  mean_turns_to_accept: number | null;
+}
+
+export interface TelemetryStats {
+  days: number;
+  series: TelemetrySeriesRow[];
+  sources: TelemetrySourceRow[];
+}
+
+export interface AutolockState {
+  enabled: boolean;
+  checked: number;
+  overturned: number;
+  overturn_rate: number;
+  disable_threshold: number;
+  self_disabled: boolean;
+}
+
+export interface TelemetryDeriveResult {
+  interactions: number;
+  exchanges: number;
+  auto_locked: number;
+  classifier_cost_usd: number;
+  skipped_budget: number;
+  errors: number;
+}
+
 const API = "/api/v1";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -362,4 +452,39 @@ export const api = {
       `/datasets/${datasetId}/suggest-models`,
       { method: "POST" },
     ),
+
+  telemetryInbox: (filters: { dataset?: string; source?: string; status?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.dataset) params.set("dataset", filters.dataset);
+    if (filters.source) params.set("source", filters.source);
+    if (filters.status) params.set("status", filters.status);
+    const qs = params.toString();
+    return request<TelemetryInbox>(`/telemetry/inbox${qs ? `?${qs}` : ""}`);
+  },
+  telemetrySpotChecks: () => request<TelemetryInbox>("/telemetry/spot-checks"),
+  telemetryPromote: (exchangeId: number, lock: boolean) =>
+    request<{ case_id: number; dataset_id: number }>(
+      `/telemetry/exchanges/${exchangeId}/promote`,
+      { method: "POST", body: JSON.stringify({ lock }) },
+    ),
+  telemetryDiscard: (exchangeId: number) =>
+    request<void>(`/telemetry/exchanges/${exchangeId}/discard`, { method: "POST" }),
+  telemetrySpotCheckResolve: (exchangeId: number, resolution: "confirmed" | "overturned") =>
+    request<void>(`/telemetry/exchanges/${exchangeId}/spot-check`, {
+      method: "POST",
+      body: JSON.stringify({ resolution }),
+    }),
+  telemetryDerive: () => request<TelemetryDeriveResult>("/telemetry/derive", { method: "POST" }),
+  telemetryStats: (days = 30) => request<TelemetryStats>(`/telemetry/stats?days=${days}`),
+  telemetryAutolock: () => request<AutolockState>("/telemetry/autolock"),
+  telemetryUpload: async (file: File): Promise<TelemetryIngestResult> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const resp = await fetch(`${API}/telemetry/upload`, { method: "POST", body: fd });
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(`${resp.status} ${resp.statusText}: ${body}`);
+    }
+    return resp.json();
+  },
 };

@@ -8,6 +8,8 @@ import { ModelsPage } from "@/pages/ModelsPage";
 import { RunDetailPage } from "@/pages/RunDetailPage";
 import { RunsPage } from "@/pages/RunsPage";
 import { SchedulesPage } from "@/pages/SchedulesPage";
+import { TelemetryMonitorPage } from "@/pages/TelemetryMonitorPage";
+import { TelemetryPage } from "@/pages/TelemetryPage";
 import { useTheme } from "@/lib/theme";
 
 type Route =
@@ -19,6 +21,8 @@ type Route =
   | { name: "builder"; datasetId?: number }
   | { name: "models" }
   | { name: "schedules" }
+  | { name: "telemetry" }
+  | { name: "telemetry-monitor" }
   | { name: "not-found" };
 
 function parseRoute(path: string, search: string): Route {
@@ -43,6 +47,9 @@ function parseRoute(path: string, search: string): Route {
   }
   if (segments[0] === "models") return { name: "models" };
   if (segments[0] === "schedules") return { name: "schedules" };
+  if (segments[0] === "telemetry" && segments[1] === "monitor")
+    return { name: "telemetry-monitor" };
+  if (segments[0] === "telemetry") return { name: "telemetry" };
   return { name: "not-found" };
 }
 
@@ -78,6 +85,8 @@ export default function App() {
       )}
       {route.name === "models" && <ModelsPage />}
       {route.name === "schedules" && <SchedulesPage />}
+      {route.name === "telemetry" && <TelemetryPage navigate={navigate} />}
+      {route.name === "telemetry-monitor" && <TelemetryMonitorPage navigate={navigate} />}
       {route.name === "not-found" && <NotFoundPage navigate={navigate} />}
     </Layout>
   );

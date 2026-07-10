@@ -390,7 +390,7 @@ function RequestPreviewCard({
   shape,
 }: {
   datasetId: number;
-  shape: "raw" | "templated";
+  shape: "raw" | "templated" | "chat";
 }) {
   const [open, setOpen] = useState(false);
   const preview = useQuery({

@@ -5,6 +5,7 @@ import {
   Database,
   FileBarChart,
   Moon,
+  RadioTower,
   Sun,
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
@@ -21,6 +22,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { key: "datasets", label: "Datasets", href: "/datasets", icon: Database },
   { key: "runs", label: "Runs", href: "/runs", icon: FileBarChart },
+  { key: "telemetry", label: "Telemetry", href: "/telemetry", icon: RadioTower },
   { key: "models", label: "Models", href: "/models", icon: Boxes },
   { key: "schedules", label: "Schedules", href: "/schedules", icon: CalendarClock },
 ];
@@ -50,10 +52,12 @@ export function Layout({ children, currentRoute, navigate }: Props) {
           </a>
           <nav className="flex items-center gap-1 text-sm">
             {NAV.map((item) => {
-              // The builder edits datasets, so it highlights the Datasets item.
+              // The builder edits datasets, so it highlights the Datasets item;
+              // the monitor is part of the Telemetry section.
               const active =
                 currentRoute === item.key ||
-                (item.key === "datasets" && currentRoute === "builder");
+                (item.key === "datasets" && currentRoute === "builder") ||
+                (item.key === "telemetry" && currentRoute === "telemetry-monitor");
               const Icon = item.icon;
               return (
                 <a
