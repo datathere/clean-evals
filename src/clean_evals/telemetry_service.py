@@ -114,8 +114,14 @@ def _env_flag(name: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+_scrubber_cache: tuple[str, TelemetryScrubber] | None = None
+
+
 def load_scrubber() -> TelemetryScrubber | None:
     """Resolve the configured telemetry scrubber, or ``None``.
+
+    The resolved instance is cached per env-var value — entry points are
+    not re-scanned on every ingest batch.
 
     Raises:
         ValueError: When ``CLEAN_EVALS_TELEMETRY_SCRUBBER`` names an entry
@@ -123,9 +129,12 @@ def load_scrubber() -> TelemetryScrubber | None:
             a configured-but-broken scrubber must fail ingest loudly, not
             silently store raw data.
     """
+    global _scrubber_cache
     name = os.environ.get("CLEAN_EVALS_TELEMETRY_SCRUBBER", "").strip()
     if not name:
         return None
+    if _scrubber_cache is not None and _scrubber_cache[0] == name:
+        return _scrubber_cache[1]
     eps = importlib.metadata.entry_points(group="clean_evals.telemetry_scrubbers")
     for ep in eps:
         if ep.name == name:
@@ -135,6 +144,7 @@ def load_scrubber() -> TelemetryScrubber | None:
                 raise ValueError(
                     f"telemetry scrubber {name!r} does not implement TelemetryScrubber"
                 )
+            _scrubber_cache = (name, instance)
             return instance
     raise ValueError(
         f"CLEAN_EVALS_TELEMETRY_SCRUBBER={name!r} matches no entry point in "
@@ -879,8 +889,20 @@ def telemetry_stats(session: Session, *, days: int = 30) -> dict[str, Any]:
     the mechanism beats query cleverness here.
     """
     cutoff = datetime.now(UTC) - timedelta(days=days)
+    # Scalar columns only — exchanges carry envelope-sized JSON blobs the
+    # aggregation never reads.
     rows = session.execute(
-        select(TelemetryExchangeRow, TelemetryInteractionRow)
+        select(
+            TelemetryExchangeRow.verdict,
+            TelemetryExchangeRow.rating,
+            TelemetryExchangeRow.regen_count,
+            TelemetryExchangeRow.judge_score,
+            TelemetryExchangeRow.response_model,
+            TelemetryInteractionRow.id,
+            TelemetryInteractionRow.occurred_at,
+            TelemetryInteractionRow.source,
+            TelemetryInteractionRow.outcome,
+        )
         .join(
             TelemetryInteractionRow,
             TelemetryInteractionRow.id == TelemetryExchangeRow.interaction_pk,
@@ -890,11 +912,19 @@ def telemetry_stats(session: Session, *, days: int = 30) -> dict[str, Any]:
 
     daily: dict[tuple[str, str, str], dict[str, Any]] = {}
     per_interaction: dict[int, dict[str, Any]] = {}
-    for ex, inter in rows:
-        occurred = inter.occurred_at
-        if occurred.tzinfo is None:
-            occurred = occurred.replace(tzinfo=UTC)
-        key = (occurred.date().isoformat(), inter.source, ex.response_model)
+    for (
+        verdict,
+        rating,
+        regen_count,
+        judge_score,
+        response_model,
+        interaction_id,
+        occurred,
+        source,
+        outcome,
+    ) in rows:
+        occurred_utc = occurred if occurred.tzinfo is not None else occurred.replace(tzinfo=UTC)
+        key = (occurred_utc.date().isoformat(), source, response_model)
         bucket = daily.setdefault(
             key,
             {
@@ -914,18 +944,18 @@ def telemetry_stats(session: Session, *, days: int = 30) -> dict[str, Any]:
             },
         )
         bucket["exchanges"] += 1
-        bucket[ex.verdict or "unrated"] += 1
-        if ex.rating is not None:
+        bucket[verdict or "unrated"] += 1
+        if rating is not None:
             bucket["rated"] += 1
-            bucket["rating_sum"] += ex.rating
-        bucket["regen_sum"] += ex.regen_count
-        if ex.judge_score is not None:
+            bucket["rating_sum"] += rating
+        bucket["regen_sum"] += regen_count
+        if judge_score is not None:
             bucket["judge_scored"] += 1
-            bucket["judge_sum"] += ex.judge_score
+            bucket["judge_sum"] += judge_score
 
         info = per_interaction.setdefault(
-            inter.id,
-            {"source": inter.source, "outcome": inter.outcome, "exchanges": 0},
+            interaction_id,
+            {"source": source, "outcome": outcome, "exchanges": 0},
         )
         info["exchanges"] += 1
 
