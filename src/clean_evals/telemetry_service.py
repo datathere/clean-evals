@@ -53,7 +53,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from pydantic import TypeAdapter, ValidationError
-from sqlalchemy import select
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from clean_evals.models import Case, ModelResponse
@@ -160,7 +161,11 @@ def ingest_items(session: Session, items: list[Any]) -> IngestResult:
 
     Invalid items are rejected individually — one malformed envelope never
     sinks the batch. Duplicate ``(source, interaction_id)`` pairs are
-    reported and skipped, making retries of the same batch idempotent.
+    reported and skipped, making retries of the same batch idempotent —
+    including a concurrent retry of the same batch: each insert flushes
+    inside a savepoint, so a duplicate that slips past the existence check
+    (committed by the other request between our SELECT and our INSERT)
+    rolls back that one item as a duplicate instead of 500ing the batch.
     """
     result = IngestResult()
     scrubber = load_scrubber()
@@ -193,19 +198,24 @@ def ingest_items(session: Session, items: list[Any]) -> IngestResult:
         else:
             outcome = "accept" if any(e.type == "accept" for e in interaction.events) else None
 
-        session.add(
-            TelemetryInteractionRow(
-                interaction_id=interaction.interaction_id,
-                source=interaction.source,
-                dataset_name=interaction.dataset,
-                kind=interaction.kind,
-                model=interaction.model,
-                occurred_at=interaction.occurred_at,
-                outcome=outcome,
-                envelope_jsonb=interaction.model_dump(mode="json"),
-                status="pending",
-            )
-        )
+        try:
+            with session.begin_nested():
+                session.add(
+                    TelemetryInteractionRow(
+                        interaction_id=interaction.interaction_id,
+                        source=interaction.source,
+                        dataset_name=interaction.dataset,
+                        kind=interaction.kind,
+                        model=interaction.model,
+                        occurred_at=interaction.occurred_at,
+                        outcome=outcome,
+                        envelope_jsonb=interaction.model_dump(mode="json"),
+                        status="pending",
+                    )
+                )
+        except IntegrityError:
+            result.duplicates.append(interaction.interaction_id)
+            continue
         result.accepted += 1
 
     session.flush()
@@ -236,12 +246,17 @@ class DeriveStats:
 
 
 def classifier_spend_today(session: Session) -> float:
-    """Classifier spend across interactions ingested since UTC midnight."""
+    """Classifier spend since UTC midnight, keyed on when the classifier ran.
+
+    Keying on ``created_at`` (ingest time) would make spend on a backlog
+    ingested before midnight invisible to today's ceiling — a stalled queue
+    could re-spend the full daily budget every day.
+    """
     now = datetime.now(UTC)
     midnight = datetime(now.year, now.month, now.day, tzinfo=UTC)
     rows = session.execute(
         select(TelemetryInteractionRow.classifier_cost_usd).where(
-            TelemetryInteractionRow.created_at >= midnight
+            TelemetryInteractionRow.classified_at >= midnight
         )
     ).all()
     return sum(r[0] or 0.0 for r in rows)
@@ -312,9 +327,22 @@ async def derive_pending(
                         exchanges = finalize_transcript_exchanges(interaction, pending, {})
                         cost = 0.0
                         row.detail = f"classifier failed; derived unrated: {exc}"
+                    row.classified_at = datetime.now(UTC)
 
                 row.classifier_cost_usd = cost
                 stats.classifier_cost_usd += cost
+                # Replace any unpromoted exchanges from a concurrent or
+                # earlier pass in the same transaction: derivation is
+                # idempotent per interaction, so a race between the
+                # post-ingest background pass and a manual derive can
+                # double-spend on the classifier but never persist
+                # duplicate exchanges. Promoted ones are never touched.
+                session.execute(
+                    delete(TelemetryExchangeRow).where(
+                        TelemetryExchangeRow.interaction_pk == row.id,
+                        TelemetryExchangeRow.status == "derived",
+                    )
+                )
                 exchange_pks: list[int] = []
                 for ex in exchanges:
                     ex_row = _exchange_to_row(row.id, ex)
@@ -445,7 +473,10 @@ def _judge_for_dataset(session: Session, dataset: DatasetRow) -> tuple[Any, floa
     ).scalar_one_or_none()
     if config_row is None:
         return None
-    kappa = float((config_row.agreement_jsonb or {}).get("kappa", 0.0))
+    # Calibration stores agreement as {"summary": {..., "kappa"}, "rows": []}.
+    agreement = config_row.agreement_jsonb or {}
+    summary = agreement.get("summary")
+    kappa = float((summary if isinstance(summary, dict) else agreement).get("kappa", 0.0))
     from clean_evals.registry import scorers as scorer_registry
 
     scorer = scorer_registry.build("llm_judge", dataset.scorer_config or {})
@@ -453,13 +484,21 @@ def _judge_for_dataset(session: Session, dataset: DatasetRow) -> tuple[Any, floa
 
 
 def _exchange_case_input(row: TelemetryExchangeRow) -> dict[str, Any]:
-    """The ``Case.input`` a promoted exchange would carry."""
+    """The ``Case.input`` a promoted exchange would carry.
+
+    Transcript cases carry the production system prompt per case (chat
+    assembly prefers it over the dataset-level prompt); structured cases
+    rely on the dataset-level system prompt set at dataset creation.
+    """
     if row.request_input_jsonb is not None:
         return dict(row.request_input_jsonb)
     turns = (row.context_jsonb or {}).get("turns", [])
     input_payload: dict[str, Any] = {"message": row.request_text}
     if turns:
         input_payload["context"] = turns
+    system = (row.interaction.envelope_jsonb or {}).get("system")
+    if isinstance(system, str) and system.strip():
+        input_payload["system"] = system
     return input_payload
 
 
@@ -476,11 +515,7 @@ async def _judge_exchange(session_factory: sessionmaker[Session], exchange_pk: i
         if judge is None:
             return
         scorer, _ = judge
-        case = Case(
-            id=f"telemetry-{row.id}",
-            input=_exchange_case_input(row),
-            expected=row.proposed_expected_jsonb,
-        )
+        case = _judge_case(row)
         response = _exchange_response(row)
     score = await asyncio.to_thread(scorer.score, case, response)
     with session_factory() as session:
@@ -497,6 +532,19 @@ def _exchange_response(row: TelemetryExchangeRow) -> ModelResponse:
         latency_ms=0,
         cost_usd=0.0,
     )
+
+
+def _judge_case(row: TelemetryExchangeRow) -> Case:
+    """The case the judge scores an exchange against — with NO expected.
+
+    The proposed golden answer *is* the response for untouched accepts;
+    handing it to the judge as ``expected`` would make the judge compare
+    the response to a copy of itself and pass every time — a circular
+    signal, not an independent one. Judging with no expected mirrors
+    calibration: the calibrated rubric's few-shot examples carry the
+    standard, and the score reflects quality against that standard.
+    """
+    return Case(id=f"telemetry-{row.id}", input=_exchange_case_input(row), expected=None)
 
 
 def autolock_state(session: Session) -> dict[str, Any]:
@@ -558,11 +606,7 @@ async def _maybe_autolock(session_factory: sessionmaker[Session], exchange_pk: i
         scorer, kappa = judge
         if kappa < _env_float("CLEAN_EVALS_TELEMETRY_AUTOLOCK_KAPPA", 0.6):
             return False
-        case = Case(
-            id=f"telemetry-{row.id}",
-            input=_exchange_case_input(row),
-            expected=row.proposed_expected_jsonb,
-        )
+        case = _judge_case(row)
         response = _exchange_response(row)
 
     score = await asyncio.to_thread(scorer.score, case, response)
@@ -643,16 +687,40 @@ def promote_exchange(
 
     dataset = _latest_dataset(session, interaction.dataset_name)
     if dataset is None:
+        # Structured cases replay through the templated shape: the default
+        # template renders a single-field input verbatim and carries the
+        # production system prompt in the system role. The raw shape would
+        # JSON-wrap the input and has no system slot — a different request
+        # than production sent. The first promoted interaction's system
+        # prompt becomes the dataset's; transcripts carry theirs per case.
+        envelope_system = (interaction.envelope_jsonb or {}).get("request", {}).get("system")
         dataset = DatasetRow(
             name=interaction.dataset_name,
             version="v1",
             description=f"Created from telemetry source {interaction.source!r}.",
             scorer="llm_judge",
             scorer_config={},
-            request_shape="chat" if interaction.kind == "transcript" else "raw",
+            request_shape="chat" if interaction.kind == "transcript" else "templated",
+            system_prompt=(
+                envelope_system
+                if isinstance(envelope_system, str) and envelope_system.strip()
+                else None
+            ),
         )
         session.add(dataset)
         session.flush()
+    elif interaction.kind == "transcript" and dataset.request_shape != "chat":
+        raise ValueError(
+            f"dataset {interaction.dataset_name!r} has request_shape="
+            f"{dataset.request_shape!r}; transcript exchanges replay conversation "
+            "context and require a chat-shaped dataset"
+        )
+    elif interaction.kind == "structured" and dataset.request_shape == "chat":
+        raise ValueError(
+            f"dataset {interaction.dataset_name!r} is chat-shaped; a structured "
+            "exchange has no conversation to replay there — promote it to a "
+            "raw or templated dataset (use a different dataset name)"
+        )
 
     case_id = _unique_case_id(session, dataset.id, _external_case_id(row, interaction))
     case = CaseRow(

@@ -405,7 +405,9 @@ function RequestPreviewCard({
         subtitle={
           shape === "templated"
             ? "System and user message for the first case"
-            : "Requests are sent unchanged"
+            : shape === "chat"
+              ? "Replayed conversation turns and the final user message"
+              : "Requests are sent unchanged"
         }
         right={
           <Button size="sm" variant="outline" onClick={() => setOpen(!open)}>
@@ -430,6 +432,20 @@ function RequestPreviewCard({
                   <pre className="text-xs bg-muted/40 rounded-md p-3 whitespace-pre-wrap">
                     {preview.data.system}
                   </pre>
+                </div>
+              )}
+              {preview.data.history && preview.data.history.length > 0 && (
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground mb-1">
+                    Replayed conversation ({preview.data.history.length} turns)
+                  </div>
+                  <div className="text-xs bg-muted/40 rounded-md p-3 space-y-2">
+                    {preview.data.history.map((turn, i) => (
+                      <p key={i} className="whitespace-pre-wrap">
+                        <span className="font-medium">{turn.role}:</span> {turn.content}
+                      </p>
+                    ))}
+                  </div>
                 </div>
               )}
               <div>

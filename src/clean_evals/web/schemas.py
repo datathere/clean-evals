@@ -162,6 +162,9 @@ class RequestPreviewOut(_Out):
     case_id_external: str
     system: str | None
     user: str
+    # Chat-shaped datasets replay prior turns before `user`; the preview
+    # must show the request actually sent, history included.
+    history: list[dict[str, str]] | None = None
 
 
 class ModelParamsIn(BaseModel):

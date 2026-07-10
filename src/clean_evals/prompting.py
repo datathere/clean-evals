@@ -115,11 +115,20 @@ def assemble(
 
 
 def _assemble_chat(*, system_prompt: str | None, case_input: dict[str, Any]) -> AssembledRequest:
-    """Build a chat-shaped request: history replayed verbatim + final message.
+    """Build a chat-shaped request: history replayed + final message.
 
     The case's own ``system`` wins over the dataset-level system prompt —
     telemetry records the system prompt the producing application actually
     sent, and replaying anything else would change the request.
+
+    Consecutive same-role turns are merged into one message (joined with a
+    blank line), and a trailing user turn folds into the final message:
+    several providers (Anthropic, Google) reject non-alternating roles
+    outright, and the merged form is what they would have accepted from the
+    producing application in the first place. A history that *starts* with
+    an assistant turn is left as-is — some providers accept it and some
+    reject it, and that rejection surfaces as an error case result rather
+    than fabricated content.
     """
     message = case_input.get("message")
     if not isinstance(message, str) or not message.strip():
@@ -138,7 +147,14 @@ def _assemble_chat(*, system_prompt: str | None, case_input: dict[str, Any]) -> 
         text = turn.get("text", turn.get("content"))
         if not isinstance(text, str):
             raise ValueError(f"chat context turn {i} requires string 'text' (or 'content')")
-        history.append({"role": role, "content": text})
+        if history and history[-1]["role"] == role:
+            history[-1] = {"role": role, "content": f"{history[-1]['content']}\n\n{text}"}
+        else:
+            history.append({"role": role, "content": text})
+
+    if history and history[-1]["role"] == "user":
+        message = f"{history[-1]['content']}\n\n{message}"
+        history.pop()
 
     case_system = case_input.get("system")
     system = case_system if isinstance(case_system, str) and case_system.strip() else system_prompt

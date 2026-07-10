@@ -22,6 +22,7 @@ export interface RequestPreview {
   case_id_external: string;
   system: string | null;
   user: string;
+  history: { role: string; content: string }[] | null;
 }
 
 export interface GenerationStatus {

@@ -3,10 +3,14 @@
 The batch ingest endpoint is the only authenticated surface in clean-evals.
 It exists because telemetry is pushed by a production application, not
 clicked by the local user — and it is dark by default: with
-``CLEAN_EVALS_INGEST_TOKEN`` unset the route answers 404, so a default
-install grows no new attack surface. The token protects this route only;
-everything else remains unauthenticated and must stay unreachable from any
-untrusted network (see the deployment guide).
+``CLEAN_EVALS_INGEST_TOKEN`` unset the route answers 404. The token
+protects that route only. Every other endpoint here — including
+``/telemetry/upload``, which ingests the same envelopes for the local UI —
+is part of the app's unauthenticated local surface, exactly like the
+Dataset Builder's upload: anyone who can reach the port can use it. A
+reverse proxy in front of an ingest-enabled instance must forward
+``/api/v1/telemetry/interactions`` and nothing else (see the deployment
+guide).
 
 Envelopes are stored raw unless ``CLEAN_EVALS_TELEMETRY_SCRUBBER`` is
 configured — every ingest response repeats which scrubber ran (or ``null``).
@@ -74,7 +78,9 @@ def require_ingest_token(
     supplied = ""
     if authorization is not None and authorization.startswith("Bearer "):
         supplied = authorization[len("Bearer ") :].strip()
-    if not supplied or not secrets.compare_digest(supplied, token):
+    # Compare bytes: compare_digest raises TypeError on non-ASCII *strings*,
+    # which would turn a garbage bearer value into a 500 instead of a 401.
+    if not supplied or not secrets.compare_digest(supplied.encode("utf-8"), token.encode("utf-8")):
         raise HTTPException(status_code=401, detail="invalid ingest token")
 
 
@@ -132,7 +138,10 @@ async def upload_interactions(
     file: Annotated[UploadFile, File()],
 ) -> TelemetryIngestOut:
     """Manual ingest path: the same envelopes as JSONL, one per line."""
-    raw = (await file.read()).decode("utf-8", errors="strict") if file else ""
+    try:
+        raw = (await file.read()).decode("utf-8", errors="strict") if file else ""
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=400, detail=f"file is not valid UTF-8: {exc}") from exc
     items: list[Any] = []
     for lineno, line in enumerate(raw.splitlines(), start=1):
         if not line.strip():

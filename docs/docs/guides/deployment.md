@@ -56,7 +56,11 @@ this carefully before wiring it up:
 - The safe shape is a reverse proxy that terminates TLS and forwards
   **only** `/api/v1/telemetry/interactions` to clean-evals; the UI and the
   rest of the API stay reachable from localhost (or your private admin
-  network) only.
+  network) only. This is not optional hardening: the neighbouring
+  `/api/v1/telemetry/upload` route ingests the same envelopes with **no
+  token** (it serves the local UI, like the Builder upload), so a proxy
+  that forwards a path prefix instead of the exact route hands ingest —
+  and everything else — to anyone who can reach it.
 - When the producing application runs on the same host, none of this is
   needed — point it at `127.0.0.1` and keep the default binds.
 - Prefer batching envelopes and shipping them periodically over calling

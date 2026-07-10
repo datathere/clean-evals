@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -44,8 +44,8 @@ def _structured_item(interaction_id: str = "int-1", **overrides: Any) -> dict[st
     return item
 
 
-def _transcript_item(interaction_id: str = "conv-1") -> dict[str, Any]:
-    return {
+def _transcript_item(interaction_id: str = "conv-1", **overrides: Any) -> dict[str, Any]:
+    item: dict[str, Any] = {
         "interaction_id": interaction_id,
         "occurred_at": _TS,
         "source": "app-prod",
@@ -60,6 +60,8 @@ def _transcript_item(interaction_id: str = "conv-1") -> dict[str, Any]:
         ],
         "outcome": {"type": "accept"},
     }
+    item.update(overrides)
+    return item
 
 
 class _StubClassifierAdapter:
@@ -286,6 +288,10 @@ def test_promote_creates_dataset_case_candidate_and_implicit_rating(sqlite_engin
         assert dataset is not None
         assert dataset.name == "triage"
         assert dataset.version == "v1"
+        # Structured cases replay through the templated shape (single field
+        # renders verbatim; system travels in the system role) — the raw
+        # shape would JSON-wrap the input and drop the system prompt.
+        assert dataset.request_shape == "templated"
 
         cand = session.execute(select(CandidateOutputRow)).scalar_one()
         assert cand.model == "claude-sonnet-5"
@@ -354,6 +360,207 @@ def test_promote_transcript_exchange_builds_chat_case(sqlite_engine) -> None:
         assert dataset.request_shape == "chat"
 
 
+def test_promote_structured_sets_dataset_system_prompt(sqlite_engine) -> None:
+    exchange_id = _ingest_and_derive(
+        _structured_item(
+            request={"system": "Triage tickets. Return JSON.", "input": {"text": "vpn broken"}}
+        )
+    )
+    factory = session_factory()
+    with factory() as session:
+        case_pk = telemetry_service.promote_exchange(session, exchange_id)
+        session.commit()
+        case = session.get(CaseRow, case_pk)
+        assert case is not None
+        dataset = session.get(DatasetRow, case.dataset_id)
+        assert dataset is not None
+        assert dataset.system_prompt == "Triage tickets. Return JSON."
+
+
+def test_promote_transcript_carries_system_per_case(sqlite_engine) -> None:
+    factory = session_factory()
+    with factory() as session:
+        telemetry_service.ingest_items(session, [_transcript_item(system="Draft support replies.")])
+        session.commit()
+    _derive(adapters={"anthropic": _StubClassifierAdapter()})
+    with factory() as session:
+        last = (
+            session.execute(
+                select(TelemetryExchangeRow).order_by(TelemetryExchangeRow.turn_index.desc())
+            )
+            .scalars()
+            .first()
+        )
+        assert last is not None
+        case_pk = telemetry_service.promote_exchange(session, last.id, lock=True)
+        session.commit()
+        case = session.get(CaseRow, case_pk)
+        assert case is not None
+        assert case.input_jsonb["system"] == "Draft support replies."
+
+
+def test_promote_transcript_into_non_chat_dataset_refused(sqlite_engine) -> None:
+    factory = session_factory()
+    with factory() as session:
+        session.add(
+            DatasetRow(name="support-chat", version="v1", scorer="exact_match", scorer_config={})
+        )
+        telemetry_service.ingest_items(session, [_transcript_item()])
+        session.commit()
+    _derive(adapters={"anthropic": _StubClassifierAdapter()})
+    with factory() as session:
+        last = (
+            session.execute(
+                select(TelemetryExchangeRow).order_by(TelemetryExchangeRow.turn_index.desc())
+            )
+            .scalars()
+            .first()
+        )
+        assert last is not None
+        with pytest.raises(ValueError, match="chat-shaped"):
+            telemetry_service.promote_exchange(session, last.id)
+
+
+def test_rederive_replaces_instead_of_duplicating(sqlite_engine) -> None:
+    factory = session_factory()
+    with factory() as session:
+        telemetry_service.ingest_items(session, [_transcript_item()])
+        session.commit()
+    _derive(adapters={"anthropic": _StubClassifierAdapter()})
+    # Simulate the race: the interaction is re-marked pending (as a
+    # concurrent pass that read it before the first commit would see it).
+    with factory() as session:
+        inter = session.execute(select(TelemetryInteractionRow)).scalar_one()
+        inter.status = "pending"
+        session.commit()
+    _derive(adapters={"anthropic": _StubClassifierAdapter()})
+    with factory() as session:
+        count = len(session.execute(select(TelemetryExchangeRow.id)).all())
+        assert count == 2  # replaced, not appended
+
+
+def test_promote_structured_into_chat_dataset_refused(sqlite_engine) -> None:
+    factory = session_factory()
+    with factory() as session:
+        session.add(
+            DatasetRow(
+                name="triage",
+                version="v1",
+                scorer="llm_judge",
+                scorer_config={},
+                request_shape="chat",
+            )
+        )
+        session.commit()
+    exchange_id = _ingest_and_derive(_structured_item())
+    with factory() as session, pytest.raises(ValueError, match="chat-shaped"):
+        telemetry_service.promote_exchange(session, exchange_id)
+
+
+def test_ingest_survives_concurrent_duplicate_at_flush(sqlite_engine) -> None:
+    """A duplicate that slips past the existence SELECT (committed by a
+    concurrent request) must roll back that one item, not 500 the batch."""
+    factory = session_factory()
+    with factory() as session:
+        # Pre-add the row in the same session WITHOUT flushing: the
+        # existence SELECT cannot see it (autoflush is off), exactly like a
+        # concurrent request's uncommitted insert, and the unique
+        # constraint fires at the savepoint flush instead.
+        item = _structured_item("race-1")
+        session.add(
+            TelemetryInteractionRow(
+                interaction_id="race-1",
+                source="app-prod",
+                dataset_name="triage",
+                kind="structured",
+                model="claude-sonnet-5",
+                occurred_at=datetime.now(UTC),
+                outcome="accept",
+                envelope_jsonb=item,
+                status="pending",
+            )
+        )
+        result = telemetry_service.ingest_items(session, [item, _structured_item("race-2")])
+        session.commit()
+    assert result.duplicates == ["race-1"]
+    assert result.accepted == 1  # the non-duplicate item survived
+
+
+def test_classifier_budget_keyed_on_spend_day_not_ingest_day(sqlite_engine, monkeypatch) -> None:
+    monkeypatch.setenv("CLEAN_EVALS_TELEMETRY_DAILY_COST_LIMIT_USD", "0.01")
+    factory = session_factory()
+    with factory() as session:
+        telemetry_service.ingest_items(session, [_transcript_item("bl-1")])
+        session.commit()
+        # Backdate the ingest to yesterday: the spend recorded today must
+        # still count against today's ceiling.
+        inter = session.execute(select(TelemetryInteractionRow)).scalar_one()
+        inter.created_at = datetime.now(UTC) - timedelta(days=1)
+        session.commit()
+    _derive(adapters={"anthropic": _StubClassifierAdapter(cost=0.01)})
+
+    with factory() as session:
+        inter = session.execute(select(TelemetryInteractionRow)).scalar_one()
+        assert inter.classified_at is not None
+        assert telemetry_service.classifier_spend_today(session) == pytest.approx(0.01)
+
+    # A second transcript now exceeds the $0.015 ceiling and is skipped.
+    with factory() as session:
+        telemetry_service.ingest_items(session, [_transcript_item("bl-2")])
+        session.commit()
+    stats = _derive(adapters={"anthropic": _StubClassifierAdapter(cost=0.01)})
+    assert stats.skipped_budget == 1
+
+
+def test_autolock_judge_never_sees_the_proposed_golden(sqlite_engine, monkeypatch) -> None:
+    """The proposal IS the response for untouched accepts; handing it to the
+    judge as `expected` would score the response against itself."""
+    seen_expected: list[Any] = []
+
+    class _RecordingJudge(_StubJudge):
+        def score(self, case: Case, response: ModelResponse) -> ScoreResult:
+            seen_expected.append(case.expected)
+            return super().score(case, response)
+
+    judge = _RecordingJudge(score=0.9, passed=True)
+    _enable_autolock(monkeypatch, judge)
+    _seed_dataset()
+    factory = session_factory()
+    with factory() as session:
+        telemetry_service.ingest_items(session, [_structured_item()])
+        session.commit()
+    stats = _derive()
+    assert stats.auto_locked == 1
+    assert seen_expected == [None]
+
+
+def test_judge_for_dataset_reads_kappa_from_summary(sqlite_engine) -> None:
+    from clean_evals.storage.db import JudgeConfigRow
+
+    factory = session_factory()
+    with factory() as session:
+        ds = DatasetRow(name="triage", version="v1", scorer="llm_judge", scorer_config={})
+        session.add(ds)
+        session.flush()
+        session.add(
+            JudgeConfigRow(
+                dataset_id=ds.id,
+                version=1,
+                judge_model="claude-haiku-4-5-20251001",
+                rubric="r",
+                few_shot_jsonb=[],
+                # The shape calibration actually writes: kappa nested under
+                # "summary". Reading it from the top level would make the
+                # auto-lock lane permanently inoperative.
+                agreement_jsonb={"summary": {"n": 12, "kappa": 0.81}, "rows": []},
+            )
+        )
+        session.commit()
+        judge = telemetry_service._judge_for_dataset(session, ds)
+        assert judge is not None
+        assert judge[1] == pytest.approx(0.81)
+
+
 def test_discard_and_double_review_refused(sqlite_engine) -> None:
     exchange_id = _ingest_and_derive(_structured_item())
     factory = session_factory()
@@ -377,10 +584,18 @@ def _enable_autolock(monkeypatch: pytest.MonkeyPatch, judge: _StubJudge) -> None
     )
 
 
-def _seed_dataset(name: str = "triage") -> None:
+def _seed_dataset(name: str = "triage", request_shape: str = "templated") -> None:
     factory = session_factory()
     with factory() as session:
-        session.add(DatasetRow(name=name, version="v1", scorer="llm_judge", scorer_config={}))
+        session.add(
+            DatasetRow(
+                name=name,
+                version="v1",
+                scorer="llm_judge",
+                scorer_config={},
+                request_shape=request_shape,
+            )
+        )
         session.commit()
 
 
@@ -426,7 +641,7 @@ def test_autolock_requires_judge_concurrence(sqlite_engine, monkeypatch) -> None
 def test_autolock_ignores_unrated_and_inferred_positives(sqlite_engine, monkeypatch) -> None:
     judge = _StubJudge(score=0.9, passed=True)
     _enable_autolock(monkeypatch, judge)
-    _seed_dataset("support-chat")
+    _seed_dataset("support-chat", request_shape="chat")
 
     factory = session_factory()
     with factory() as session:

@@ -23,7 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Telemetry inbox and monitoring pages.** Reviewing a derived exchange
   promotes it — case, candidate outputs (including discarded
   regenerations), implicit rating (`ratings.source="implicit"`) — or
-  discards it. Monitoring charts acceptance rate, mean implicit rating,
+  discards it. Auto-created datasets preserve the production request
+  faithfully: transcripts get a chat-shaped dataset with the system
+  prompt carried per case; structured interactions get a templated one
+  with the system prompt taken from the first promoted interaction. Monitoring charts acceptance rate, mean implicit rating,
   corrections per turn, and turns-to-accept per source and model, with
   optional judge-scored sampling (off by default;
   `CLEAN_EVALS_TELEMETRY_JUDGE_SAMPLE_RATE`).
@@ -49,6 +52,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A case whose request cannot be assembled (missing template field,
   malformed chat context) now fails alone with `status="error"` instead of
   crashing the run.
+- Findings from the pre-release review of the telemetry feature, all with
+  regression tests:
+    - The classifier's daily ceiling is keyed on when the classifier ran
+      (`classified_at`, migration `0005`), not on ingest time — a backlog
+      ingested before midnight can no longer re-spend the full ceiling.
+    - Concurrent retries of the same ingest batch no longer 500: each
+      insert flushes inside a savepoint, so a duplicate that slips past
+      the existence check rolls back as a per-item duplicate.
+    - Chat assembly merges consecutive same-role turns and folds a
+      trailing user turn into the final message, satisfying providers that
+      reject non-alternating roles (Anthropic, Google).
+    - A follow-up user message is attributed only to the response it
+      immediately follows; with consecutive assistant turns, nothing is
+      attributed to the wrong exchange, and the terminal outcome speaks
+      only for the transcript's last assistant turn.
+    - The auto-lock judge scores exchanges against the calibrated standard
+      with no expected answer — previously it compared the response to the
+      proposed golden, which for untouched accepts is the response itself
+      (a circular, always-passing signal). It also reads kappa from the
+      calibration summary where it is actually stored.
+    - Promotion refuses a structured exchange into a chat-shaped dataset
+      (the reverse guard already existed); switching a dataset to
+      `request_shape="chat"` is refused with 400 when its cases lack the
+      `message` field, instead of burning a 100%-error run.
+    - The request preview includes the replayed conversation turns for
+      chat-shaped cases; the ingest token gate returns 401 (not 500) for
+      non-ASCII bearer values; non-UTF-8 telemetry uploads return 400.
+    - Promotion preserves the production system prompt (per case for
+      transcripts, dataset-level for structured) and creates templated
+      datasets for structured telemetry so replays match what production
+      sent.
 
 ## [0.2.0] - 2026-07-02
 

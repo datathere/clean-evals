@@ -69,6 +69,28 @@ def set_prompt_spec(
     row = session.get(DatasetRow, dataset_id)
     if row is None:
         raise HTTPException(status_code=404, detail="dataset not found")
+    if payload.request_shape == "chat":
+        # The chat shape requires every case to carry a 'message' field;
+        # refusing the switch upfront beats a run where every case fails
+        # request assembly.
+        offender = next(
+            (
+                c.case_id_external
+                for c in row.cases
+                if not isinstance((c.input_jsonb or {}).get("message"), str)
+                or not str((c.input_jsonb or {}).get("message")).strip()
+            ),
+            None,
+        )
+        if offender is not None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"case {offender!r} has no non-empty string 'message' field; "
+                    "the chat shape replays cases as conversations and cannot "
+                    "assemble this dataset"
+                ),
+            )
     row.request_shape = payload.request_shape
     row.system_prompt = payload.system_prompt
     row.shared_context = payload.shared_context
@@ -143,7 +165,14 @@ def preview_request(
             status_code=400, detail=f"user_template references a missing field: {exc}"
         ) from exc
     return RequestPreviewOut(
-        case_id_external=case.case_id_external, system=request.system, user=request.user
+        case_id_external=case.case_id_external,
+        system=request.system,
+        user=request.user,
+        history=(
+            [{"role": turn["role"], "content": turn["content"]} for turn in request.history]
+            if request.history
+            else None
+        ),
     )
 
 

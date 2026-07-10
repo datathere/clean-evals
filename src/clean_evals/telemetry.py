@@ -361,8 +361,12 @@ class PendingExchange(_StrictModel):
     """An exchange awaiting its follow-up label from the classifier.
 
     ``follow_up_turn`` is the index of the user turn that reviews this
-    exchange's response, or ``None`` for the final exchange (whose signal
-    comes from the transcript's terminal outcome instead).
+    exchange's response — the turn *immediately* after it, and only when
+    that turn is a user turn. ``is_final`` is true when this exchange's
+    response is the transcript's last assistant turn; only then may the
+    terminal outcome speak for it. When trailing assistant turns were
+    skipped (no user request to pair them with), the outcome describes
+    those, and no exchange inherits it.
     """
 
     turn_index: int
@@ -374,6 +378,7 @@ class PendingExchange(_StrictModel):
     regen_count: int = 0
     follow_up_turn: int | None = None
     follow_up_text: str | None = None
+    is_final: bool = False
 
 
 def explode_transcript(interaction: TranscriptInteraction) -> list[PendingExchange]:
@@ -381,19 +386,22 @@ def explode_transcript(interaction: TranscriptInteraction) -> list[PendingExchan
 
     For turns ``u1 a1 u2 a2 u3 a3``: exchange *k* pairs user turn *k* with
     the assistant turn that immediately follows it, carries all prior turns
-    as context, and is reviewed by the *next* user turn (the final exchange
-    by the terminal outcome). Assistant turns without an immediately
-    preceding user turn are skipped — there is no request to pair them with.
+    as context, and is reviewed by the user turn immediately after it (the
+    final exchange by the terminal outcome). Assistant turns without an
+    immediately preceding user turn are skipped — there is no request to
+    pair them with — and a user message that follows a *different* assistant
+    turn is never attributed to an earlier exchange: a reaction reviews the
+    response it actually followed.
     """
     exchanges: list[PendingExchange] = []
     turns = interaction.turns
+    last_assistant = max(
+        (i for i, turn in enumerate(turns) if turn.role == "assistant"), default=-1
+    )
     for i, turn in enumerate(turns):
         if turn.role != "assistant" or i == 0 or turns[i - 1].role != "user":
             continue
-        follow_up = next(
-            (j for j in range(i + 1, len(turns)) if turns[j].role == "user"),
-            None,
-        )
+        follow_up = i + 1 if i + 1 < len(turns) and turns[i + 1].role == "user" else None
         exchanges.append(
             PendingExchange(
                 turn_index=i,
@@ -405,6 +413,7 @@ def explode_transcript(interaction: TranscriptInteraction) -> list[PendingExchan
                 regen_count=len(turn.regenerations),
                 follow_up_turn=follow_up,
                 follow_up_text=turns[follow_up].text if follow_up is not None else None,
+                is_final=i == last_assistant,
             )
         )
     return exchanges
@@ -455,7 +464,12 @@ def finalize_transcript_exchanges(
                 rating = _clamp_rating(base - ex.regen_count) if base is not None else None
                 feedback = ex.follow_up_text if use_feedback else None
                 proposed = {"text": ex.response_text} if propose else None
-        elif interaction.outcome is not None and interaction.outcome.type == "accept":
+        elif (
+            ex.is_final and interaction.outcome is not None and interaction.outcome.type == "accept"
+        ):
+            # The terminal outcome speaks only for the transcript's last
+            # exchange; an earlier exchange without an immediate user
+            # reaction has no signal of its own.
             verdict, label = "positive", "accepted"
             rating = _clamp_rating(5 - ex.regen_count)
             proposed = interaction.outcome.final_output or {"text": ex.response_text}

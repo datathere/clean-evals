@@ -36,7 +36,10 @@ flowchart LR
 
 Every envelope is stored verbatim, so derivation is repeatable: after a
 classifier or heuristic change, re-deriving never needs the producing
-application again.
+application again. Derivation is also idempotent per interaction — a
+re-derivation (or a race between the post-ingest background pass and a
+manual derive) replaces the interaction's unpromoted exchanges rather
+than duplicating them; promoted exchanges are never touched.
 
 ## The envelope
 
@@ -184,9 +187,15 @@ rating (`source="implicit"`) in the target dataset — or **discards** it.
 
 The `dataset` field of the envelope names the target dataset; the latest
 version is used, and a missing dataset is created (`v1`, `llm_judge`
-scorer, chat-shaped for transcripts). Promotion refuses duplicates: an
-identical (context, request) already promoted to the same dataset is
-rejected.
+scorer). Transcripts create a `chat`-shaped dataset and carry their
+production system prompt per case; structured interactions create a
+`templated` one whose system prompt is taken from the first promoted
+interaction — the templated shape renders a single-field input verbatim
+and sends the system prompt in the system role, exactly as production
+did. Promotion refuses duplicates (an identical (context, request)
+already promoted to the same dataset) and refuses to put a transcript
+exchange into a dataset that is not chat-shaped — its context could not
+replay there.
 
 Only positive exchanges propose their own response as the golden answer.
 A corrected response's eventual replacement satisfies *refined*
@@ -230,9 +239,17 @@ automated pathway runs without a measured error estimate.
 
 A promoted transcript exchange stores its conversation prefix in the case
 input, and the dataset gets `request_shape: "chat"`: eval runs replay the
-prior turns verbatim as message history and send the case's `message` as
-the final user message. Flattening the context into one text blob would
-replay a *different* request than production sent, so it isn't done.
+prior turns as message history and send the case's `message` as the final
+user message. Flattening the context into one text blob would replay a
+*different* request than production sent, so it isn't done. One
+normalisation does happen at assembly: consecutive same-role turns merge
+into a single message (joined by a blank line), and a trailing user turn
+folds into the final message — several providers reject non-alternating
+roles outright, and the merged form is what they would have accepted from
+the producing application in the first place. A context that *starts*
+with an assistant turn is sent as-is; providers that reject it fail that
+case with a visible error rather than clean-evals fabricating an opening
+user message.
 
 ```json
 {

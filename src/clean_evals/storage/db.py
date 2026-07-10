@@ -317,6 +317,9 @@ class TelemetryInteractionRow(Base):
     outcome: Mapped[str | None] = mapped_column(String(20), nullable=True)  # accept|ended|None
     envelope_jsonb: Mapped[dict[str, Any]] = mapped_column(JSON)
     classifier_cost_usd: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    # When the classifier actually ran — the daily budget is keyed on this,
+    # not on created_at: a backlog ingested yesterday still spends today.
+    classified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(
         String(20), default="pending", index=True, nullable=False
     )  # pending | derived | error

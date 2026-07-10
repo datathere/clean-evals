@@ -150,3 +150,49 @@ def test_chat_shape_rejects_bad_roles() -> None:
             user_template=None,
             case_input={"context": [{"role": "system", "text": "x"}], "message": "hi"},
         )
+
+
+def test_chat_shape_merges_consecutive_same_role_turns() -> None:
+    """Anthropic and Google reject non-alternating roles; merged turns are
+    what they would have accepted from the producing application."""
+    req = assemble(
+        request_shape="chat",
+        system_prompt=None,
+        shared_context=None,
+        user_template=None,
+        case_input={
+            "context": [
+                {"role": "user", "text": "first"},
+                {"role": "user", "text": "second"},
+                {"role": "assistant", "text": "reply"},
+            ],
+            "message": "follow up",
+        },
+    )
+    assert req.history == (
+        {"role": "user", "content": "first\n\nsecond"},
+        {"role": "assistant", "content": "reply"},
+    )
+    assert req.user == "follow up"
+
+
+def test_chat_shape_folds_trailing_user_turn_into_message() -> None:
+    req = assemble(
+        request_shape="chat",
+        system_prompt=None,
+        shared_context=None,
+        user_template=None,
+        case_input={
+            "context": [
+                {"role": "user", "text": "hi"},
+                {"role": "assistant", "text": "hello"},
+                {"role": "user", "text": "one more thing"},
+            ],
+            "message": "actually, do this",
+        },
+    )
+    assert req.history == (
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "content": "hello"},
+    )
+    assert req.user == "one more thing\n\nactually, do this"

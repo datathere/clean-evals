@@ -196,6 +196,40 @@ def test_explode_skips_assistant_without_preceding_user() -> None:
         )
     )
     assert [p.turn_index for p in pending] == [1]
+    # The last assistant turn (the skipped one) is the transcript's real
+    # final response; the derived exchange must not claim the outcome.
+    assert pending[0].is_final is False
+
+
+def test_follow_up_never_crosses_an_intervening_assistant_turn() -> None:
+    """u, a1, a2, u('wrong'): the complaint reviews a2, not a1's exchange."""
+    interaction = _transcript(
+        [
+            {"role": "user", "text": "hi"},
+            {"role": "assistant", "text": "first reply"},
+            {"role": "assistant", "text": "second reply"},
+            {"role": "user", "text": "no, that's wrong"},
+        ],
+        outcome={"type": "accept"},
+    )
+    pending = explode_transcript(interaction)
+    assert len(pending) == 1
+    assert pending[0].follow_up_turn is None  # a2 sits between; no attribution
+    derived = finalize_transcript_exchanges(
+        interaction,
+        pending,
+        {3: "correction"},  # even with a label for turn 3
+    )
+    # No signal is invented for a1: not the complaint (it targets a2), and
+    # not the outcome (a2 is the transcript's final response, not a1).
+    assert derived[0].verdict == "unrated"
+    assert derived[0].feedback is None
+
+
+def test_outcome_applies_only_to_the_final_assistant_turns_exchange() -> None:
+    interaction = _transcript(_FOUR_TURNS, outcome={"type": "accept"})
+    pending = explode_transcript(interaction)
+    assert [p.is_final for p in pending] == [False, True]
 
 
 def test_explode_counts_regenerations() -> None:
