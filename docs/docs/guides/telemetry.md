@@ -132,6 +132,12 @@ is literally a pre-played blind review.
 A classifier failure derives the transcript with no labels — exchanges
 come out unrated rather than invented.
 
+Follow-up labels derive from text your end users wrote, and the
+classifier reads it verbatim — treat implicit ratings as a signal from
+that population, not a verdict. Nothing rides on them unsupervised: the
+inbox is human-reviewed, and the auto-lock lane accepts only labels
+derived from commit events, never classifier output.
+
 ## Ingesting
 
 ### Web service (token-gated)
@@ -151,6 +157,11 @@ The response reports per-item outcomes — invalid envelopes are rejected
 individually with their index and reason, and duplicate
 `(source, interaction_id)` pairs are skipped, so retrying a batch is
 idempotent. Derivation runs in the background after each accepted batch.
+
+Envelopes are immutable once ingested: a re-sent `interaction_id` is
+skipped *even if its transcript grew*. Send an interaction only when it
+is complete (the outcome is known), or give a continued conversation a
+new id.
 
 The token protects this route only. Everything else remains
 unauthenticated: the ingest endpoint being reachable by your application
@@ -192,7 +203,10 @@ production system prompt per case; structured interactions create a
 `templated` one whose system prompt is taken from the first promoted
 interaction — the templated shape renders a single-field input verbatim
 and sends the system prompt in the system role, exactly as production
-did. Promotion refuses duplicates (an identical (context, request)
+did. A structured exchange recorded under a *different* system prompt
+than the dataset carries is refused: bump the dataset version (or use
+another dataset name) when your application's prompt changes, so replays
+stay faithful to what production sent. Promotion refuses duplicates (an identical (context, request)
 already promoted to the same dataset) and refuses to put a transcript
 exchange into a dataset that is not chat-shaped — its context could not
 replay there.

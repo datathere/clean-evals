@@ -293,10 +293,14 @@ async def derive_pending(
 
     try:
         for pk in pending_ids:
+            # Read phase: load and validate, then close the session. The
+            # classifier call can take up to 60 seconds; no transaction is
+            # held open across that await.
             with session_factory() as session:
                 row = session.get(TelemetryInteractionRow, pk)
                 if row is None or row.status != "pending":
                     continue
+                interaction_id = row.interaction_id
                 try:
                     interaction = _interaction_adapter.validate_python(row.envelope_jsonb)
                 except ValidationError as exc:
@@ -306,37 +310,49 @@ async def derive_pending(
                     stats.errors += 1
                     continue
 
-                if isinstance(interaction, StructuredInteraction):
-                    exchanges = [derive_structured(interaction)]
+            detail: str | None = None
+            classified_at: datetime | None = None
+            if isinstance(interaction, StructuredInteraction):
+                exchanges = [derive_structured(interaction)]
+                cost = 0.0
+            else:
+                if spent_today + stats.classifier_cost_usd >= limit:
+                    with session_factory() as session:
+                        fresh = session.get(TelemetryInteractionRow, pk)
+                        if fresh is not None:
+                            fresh.detail = (
+                                f"classifier daily ceiling ${limit:.2f} reached; will retry"
+                            )
+                            session.commit()
+                    stats.skipped_budget += 1
+                    continue
+                try:
+                    exchanges, cost = await _derive_transcript(interaction, adapter_cache, owned)
+                except Exception as exc:
+                    _log.warning("classifier failed for interaction %s: %s", interaction_id, exc)
+                    pending = explode_transcript(interaction)
+                    exchanges = finalize_transcript_exchanges(interaction, pending, {})
                     cost = 0.0
-                else:
-                    if spent_today + stats.classifier_cost_usd >= limit:
-                        row.detail = f"classifier daily ceiling ${limit:.2f} reached; will retry"
-                        session.commit()
-                        stats.skipped_budget += 1
-                        continue
-                    try:
-                        exchanges, cost = await _derive_transcript(
-                            interaction, adapter_cache, owned
-                        )
-                    except Exception as exc:
-                        _log.warning(
-                            "classifier failed for interaction %s: %s", row.interaction_id, exc
-                        )
-                        pending = explode_transcript(interaction)
-                        exchanges = finalize_transcript_exchanges(interaction, pending, {})
-                        cost = 0.0
-                        row.detail = f"classifier failed; derived unrated: {exc}"
-                    row.classified_at = datetime.now(UTC)
+                    detail = f"classifier failed; derived unrated: {exc}"
+                classified_at = datetime.now(UTC)
 
+            # Write phase: re-check the claim. If a concurrent pass finished
+            # while we were classifying, it owns the result — writing ours
+            # anyway could resurrect a duplicate of an exchange a human
+            # promoted in between.
+            with session_factory() as session:
+                row = session.get(TelemetryInteractionRow, pk)
+                if row is None or row.status != "pending":
+                    continue
                 row.classifier_cost_usd = cost
+                if classified_at is not None:
+                    row.classified_at = classified_at
+                if detail is not None:
+                    row.detail = detail
                 stats.classifier_cost_usd += cost
-                # Replace any unpromoted exchanges from a concurrent or
-                # earlier pass in the same transaction: derivation is
-                # idempotent per interaction, so a race between the
-                # post-ingest background pass and a manual derive can
-                # double-spend on the classifier but never persist
-                # duplicate exchanges. Promoted ones are never touched.
+                # Replace any unpromoted exchanges from an earlier pass in
+                # the same transaction: derivation is idempotent per
+                # interaction. Promoted exchanges are never touched.
                 session.execute(
                     delete(TelemetryExchangeRow).where(
                         TelemetryExchangeRow.interaction_pk == row.id,
@@ -637,6 +653,10 @@ async def _maybe_autolock(session_factory: sessionmaker[Session], exchange_pk: i
 # ---------------------------------------------------------------------------
 
 
+class DuplicatePromotion(ValueError):
+    """An identical (context, request) was already promoted to this dataset."""
+
+
 def promote_exchange(
     session: Session,
     exchange_pk: int,
@@ -679,7 +699,9 @@ def promote_exchange(
         .limit(1)
     ).first()
     if duplicate is not None:
-        raise ValueError("an identical (context, request) was already promoted to this dataset")
+        raise DuplicatePromotion(
+            "an identical (context, request) was already promoted to this dataset"
+        )
 
     expected = expected_override if expected_override is not None else row.proposed_expected_jsonb
     if lock and expected is None:
@@ -721,6 +743,21 @@ def promote_exchange(
             "exchange has no conversation to replay there — promote it to a "
             "raw or templated dataset (use a different dataset name)"
         )
+
+    if interaction.kind == "structured":
+        # Replays run under the dataset's system prompt; a case recorded
+        # under a different one would silently replay a request production
+        # never sent.
+        envelope_system = (
+            (interaction.envelope_jsonb or {}).get("request", {}).get("system") or ""
+        ).strip()
+        dataset_system = (dataset.system_prompt or "").strip()
+        if envelope_system != dataset_system:
+            raise ValueError(
+                f"this exchange was recorded under a different system prompt than "
+                f"dataset {interaction.dataset_name!r} carries; bump the dataset "
+                "version (or use another dataset name) so replays stay faithful"
+            )
 
     case_id = _unique_case_id(session, dataset.id, _external_case_id(row, interaction))
     case = CaseRow(

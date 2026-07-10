@@ -360,6 +360,36 @@ def test_promote_transcript_exchange_builds_chat_case(sqlite_engine) -> None:
         assert dataset.request_shape == "chat"
 
 
+def test_promote_structured_with_mismatched_system_prompt_refused(sqlite_engine) -> None:
+    first = _ingest_and_derive(
+        _structured_item("sp-1", request={"system": "Prompt v1.", "input": {"text": "a ticket"}})
+    )
+    factory = session_factory()
+    with factory() as session:
+        telemetry_service.promote_exchange(session, first)  # creates dataset with v1 prompt
+        telemetry_service.ingest_items(
+            session,
+            [
+                _structured_item(
+                    "sp-2",
+                    request={"system": "Prompt v2 — rewritten.", "input": {"text": "another"}},
+                )
+            ],
+        )
+        session.commit()
+    _derive()
+    with factory() as session:
+        second = (
+            session.execute(
+                select(TelemetryExchangeRow.id).where(TelemetryExchangeRow.status == "derived")
+            )
+            .scalars()
+            .one()
+        )
+        with pytest.raises(ValueError, match="different system prompt"):
+            telemetry_service.promote_exchange(session, second)
+
+
 def test_promote_structured_sets_dataset_system_prompt(sqlite_engine) -> None:
     exchange_id = _ingest_and_derive(
         _structured_item(

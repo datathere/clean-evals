@@ -193,9 +193,8 @@ def inbox(
 ) -> TelemetryInboxOut:
     """Derived exchanges awaiting review, newest first.
 
-    ``status=promoted`` with open spot checks is how the spot-check queue
-    is listed; the frontend requests ``spot_check=true`` via this endpoint's
-    ``status`` filter plus client-side filtering on the returned rows.
+    Open spot checks are listed by the dedicated ``/telemetry/spot-checks``
+    endpoint, not through this filter.
     """
     conditions = [TelemetryExchangeRow.status == status]
     if dataset is not None:
@@ -235,9 +234,10 @@ def promote(
         case_pk = telemetry_service.promote_exchange(
             session, exchange_id, lock=payload.lock, expected_override=payload.expected
         )
+    except telemetry_service.DuplicatePromotion as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
-        status = 409 if "already promoted" in str(exc) else 400
-        raise HTTPException(status_code=status, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     case = session.get(CaseRow, case_pk)
     assert case is not None  # promote_exchange just created it
     return TelemetryPromoteOut(case_id=case_pk, dataset_id=case.dataset_id)

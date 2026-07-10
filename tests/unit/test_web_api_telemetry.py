@@ -183,6 +183,59 @@ def test_preview_shows_replayed_history_for_chat_cases(sqlite_engine) -> None:
         ]
 
 
+def test_double_promote_of_identical_input_is_409(sqlite_engine) -> None:
+    lines = "\n".join(
+        json.dumps(_structured_item(f"dup-{i}")) for i in range(2)
+    )  # identical inputs, distinct ids
+    with TestClient(app) as client:
+        client.post(
+            "/api/v1/telemetry/upload",
+            files={"file": ("t.jsonl", lines, "text/plain")},
+        )
+        exchanges = client.get("/api/v1/telemetry/inbox").json()["exchanges"]
+        first = client.post(
+            f"/api/v1/telemetry/exchanges/{exchanges[0]['id']}/promote", json={"lock": True}
+        )
+        assert first.status_code == 200
+        second = client.post(
+            f"/api/v1/telemetry/exchanges/{exchanges[1]['id']}/promote", json={"lock": True}
+        )
+        assert second.status_code == 409
+
+
+def test_preview_of_malformed_chat_case_returns_400(sqlite_engine) -> None:
+    from clean_evals.storage.db import CaseRow, DatasetRow, session_factory
+
+    factory = session_factory()
+    with factory() as session:
+        ds = DatasetRow(
+            name="broken-chat",
+            version="v1",
+            scorer="llm_judge",
+            scorer_config={},
+            request_shape="chat",
+        )
+        session.add(ds)
+        session.flush()
+        session.add(
+            CaseRow(
+                dataset_id=ds.id,
+                case_id_external="c1",
+                input_jsonb={"text": "no message field"},
+                expected_jsonb=None,
+                tags_jsonb=[],
+                locked=False,
+                metadata_jsonb={},
+            )
+        )
+        session.commit()
+        ds_id = ds.id
+    with TestClient(app) as client:
+        resp = client.get(f"/api/v1/datasets/{ds_id}/preview-request")
+        assert resp.status_code == 400
+        assert "message" in resp.json()["detail"]
+
+
 def test_prompt_spec_refuses_chat_for_incompatible_cases(sqlite_engine) -> None:
     with TestClient(app) as client:
         up = client.post(

@@ -82,7 +82,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Promotion preserves the production system prompt (per case for
       transcripts, dataset-level for structured) and creates templated
       datasets for structured telemetry so replays match what production
-      sent.
+      sent. A structured exchange recorded under a different system prompt
+      than its dataset carries is refused rather than silently replaying
+      the wrong prompt.
+    - Previewing a malformed chat case returns 400 instead of 500; failed
+      telemetry uploads and derivations render their error in the UI;
+      duplicate promotion is a typed conflict (409) rather than an
+      exception-text match; derivation no longer holds a database
+      transaction open across the classifier call and re-checks its claim
+      before writing, closing a race that could resurrect a duplicate of
+      a just-promoted exchange.
 
 ## [0.2.0] - 2026-07-02
 

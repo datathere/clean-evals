@@ -106,6 +106,16 @@ export function TelemetryPage({ navigate }: Props) {
         review below.
       </p>
 
+      {upload.error && (
+        <div className="text-sm rounded-md border border-destructive/40 px-4 py-3 text-destructive">
+          Upload failed: {String(upload.error)}
+        </div>
+      )}
+      {derive.error && (
+        <div className="text-sm rounded-md border border-destructive/40 px-4 py-3 text-destructive">
+          Derivation failed: {String(derive.error)}
+        </div>
+      )}
       {upload.data && (
         <div className="text-sm rounded-md border px-4 py-3 bg-secondary/40">
           Accepted {upload.data.accepted}

@@ -164,6 +164,8 @@ def preview_request(
         raise HTTPException(
             status_code=400, detail=f"user_template references a missing field: {exc}"
         ) from exc
+    except ValueError as exc:  # malformed chat case input
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return RequestPreviewOut(
         case_id_external=case.case_id_external,
         system=request.system,
