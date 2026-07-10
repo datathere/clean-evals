@@ -150,6 +150,8 @@ async def generate_candidates(
                 case_input=case_input,
             )
             params = (model_params or {}).get(model)
+            # Passed only when present — see the same pattern in runner.py.
+            extra: dict[str, Any] = {"history": request.history} if request.history else {}
             async with sem:
                 response = await adapter_for(model).complete(
                     prompt=request.user,
@@ -165,7 +167,7 @@ async def generate_candidates(
                     system=request.system,
                     reasoning_effort=params.reasoning_effort if params else None,
                     max_output_tokens=params.max_output_tokens if params else None,
-                    history=request.history,
+                    **extra,
                 )
             await cost.add(response.cost_usd)
             row.update(

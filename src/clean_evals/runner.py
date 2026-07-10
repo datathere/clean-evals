@@ -321,6 +321,9 @@ class Runner:
         status: str = "ok"
         error: str | None = None
 
+        # history is passed only when present so adapters predating the
+        # chat shape keep working for every single-shot dataset.
+        extra: dict[str, Any] = {"history": request.history} if request.history else {}
         for attempt in range(config.retries + 1):
             try:
                 params = config.model_params.get(model)
@@ -338,7 +341,7 @@ class Runner:
                     system=request.system,
                     reasoning_effort=params.reasoning_effort if params else None,
                     max_output_tokens=params.max_output_tokens if params else None,
-                    history=request.history,
+                    **extra,
                 )
                 break
             except RateLimited as exc:

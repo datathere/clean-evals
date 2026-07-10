@@ -443,3 +443,98 @@ async def test_local_sends_system_message_and_prompt() -> None:
     )
     await adapter.aclose()
     assert resp.content == "ok"
+
+
+# ---------------------------------------------------------------------------
+# Chat history (request_shape="chat" replay)
+# ---------------------------------------------------------------------------
+
+_HISTORY = (
+    {"role": "user", "content": "summarize this"},
+    {"role": "assistant", "content": "Long summary."},
+)
+
+
+@pytest.mark.asyncio
+async def test_anthropic_replays_history_before_prompt() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["messages"] == [
+            {"role": "user", "content": "summarize this"},
+            {"role": "assistant", "content": "Long summary."},
+            {"role": "user", "content": "shorter please"},
+        ]
+        return httpx.Response(
+            200,
+            json={"content": [{"type": "text", "text": "Short."}], "usage": {}},
+        )
+
+    adapter = AnthropicAdapter(api_key="k", client=_client(httpx.MockTransport(handler)))
+    resp = await adapter.complete(
+        prompt="shorter please",
+        model="claude-3-5-sonnet-20241022",
+        temperature=0.0,
+        seed=None,
+        timeout_s=5,
+        history=_HISTORY,
+    )
+    await adapter.aclose()
+    assert resp.content == "Short."
+
+
+@pytest.mark.asyncio
+async def test_openai_history_sits_between_system_and_prompt() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["messages"] == [
+            {"role": "system", "content": "You summarize."},
+            {"role": "user", "content": "summarize this"},
+            {"role": "assistant", "content": "Long summary."},
+            {"role": "user", "content": "shorter please"},
+        ]
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": "Short."}}], "usage": {}}
+        )
+
+    adapter = OpenAIAdapter(api_key="k", client=_client(httpx.MockTransport(handler)))
+    resp = await adapter.complete(
+        prompt="shorter please",
+        model="gpt-4o-2024-11-20",
+        temperature=0.0,
+        seed=None,
+        timeout_s=5,
+        system="You summarize.",
+        history=_HISTORY,
+    )
+    await adapter.aclose()
+    assert resp.content == "Short."
+
+
+@pytest.mark.asyncio
+async def test_google_maps_assistant_history_to_model_role() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["contents"] == [
+            {"role": "user", "parts": [{"text": "summarize this"}]},
+            {"role": "model", "parts": [{"text": "Long summary."}]},
+            {"role": "user", "parts": [{"text": "shorter please"}]},
+        ]
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [{"content": {"parts": [{"text": "Short."}]}}],
+                "usageMetadata": {},
+            },
+        )
+
+    adapter = GoogleAdapter(api_key="k", client=_client(httpx.MockTransport(handler)))
+    resp = await adapter.complete(
+        prompt="shorter please",
+        model="gemini-2.0-flash-001",
+        temperature=0.0,
+        seed=None,
+        timeout_s=5,
+        history=_HISTORY,
+    )
+    await adapter.aclose()
+    assert resp.content == "Short."

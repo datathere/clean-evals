@@ -164,6 +164,7 @@ def ingest_items(session: Session, items: list[Any]) -> IngestResult:
     """
     result = IngestResult()
     scrubber = load_scrubber()
+    seen: set[tuple[str, str]] = set()  # duplicates within this batch
 
     for index, item in enumerate(items):
         try:
@@ -174,15 +175,17 @@ def ingest_items(session: Session, items: list[Any]) -> IngestResult:
         if scrubber is not None:
             interaction = scrubber.scrub_interaction(interaction)
 
+        key = (interaction.source, interaction.interaction_id)
         existing = session.execute(
             select(TelemetryInteractionRow.id).where(
                 TelemetryInteractionRow.source == interaction.source,
                 TelemetryInteractionRow.interaction_id == interaction.interaction_id,
             )
         ).first()
-        if existing is not None:
+        if key in seen or existing is not None:
             result.duplicates.append(interaction.interaction_id)
             continue
+        seen.add(key)
 
         outcome: str | None = None
         if isinstance(interaction, TranscriptInteraction):

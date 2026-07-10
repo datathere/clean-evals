@@ -113,6 +113,9 @@ def ingest_interactions(
         result = telemetry_service.ingest_items(session, payload)
     except ValueError as exc:  # misconfigured scrubber must fail loudly
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    # Commit before scheduling: the background pass opens its own session
+    # and must see these rows regardless of dependency-teardown ordering.
+    session.commit()
     background.add_task(_derive_in_background)
     return TelemetryIngestOut(
         accepted=result.accepted,
@@ -146,6 +149,7 @@ async def upload_interactions(
         result = telemetry_service.ingest_items(session, items)
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    session.commit()  # see ingest_interactions
     background.add_task(_derive_in_background)
     return TelemetryIngestOut(
         accepted=result.accepted,
