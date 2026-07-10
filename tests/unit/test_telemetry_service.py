@@ -101,9 +101,7 @@ class _StubJudge:
 
 
 def _derive(adapters: dict[str, Any] | None = None) -> telemetry_service.DeriveStats:
-    return asyncio.run(
-        telemetry_service.derive_pending(session_factory(), adapters=adapters)
-    )
+    return asyncio.run(telemetry_service.derive_pending(session_factory(), adapters=adapters))
 
 
 # ---------------------------------------------------------------------------
@@ -194,9 +192,7 @@ def test_derive_transcript_uses_one_classifier_call(sqlite_engine) -> None:
 
     with factory() as session:
         rows = (
-            session.execute(
-                select(TelemetryExchangeRow).order_by(TelemetryExchangeRow.turn_index)
-            )
+            session.execute(select(TelemetryExchangeRow).order_by(TelemetryExchangeRow.turn_index))
             .scalars()
             .all()
         )
@@ -243,9 +239,7 @@ def test_classifier_failure_derives_unrated(sqlite_engine) -> None:
     assert stats.exchanges == 2
     with factory() as session:
         rows = (
-            session.execute(
-                select(TelemetryExchangeRow).order_by(TelemetryExchangeRow.turn_index)
-            )
+            session.execute(select(TelemetryExchangeRow).order_by(TelemetryExchangeRow.turn_index))
             .scalars()
             .all()
         )
@@ -267,9 +261,11 @@ def _ingest_and_derive(item: dict[str, Any]) -> int:
         session.commit()
     _derive(adapters={"anthropic": _StubClassifierAdapter()})
     with factory() as session:
-        return session.execute(
-            select(TelemetryExchangeRow.id).order_by(TelemetryExchangeRow.id)
-        ).scalars().first()
+        return (
+            session.execute(select(TelemetryExchangeRow.id).order_by(TelemetryExchangeRow.id))
+            .scalars()
+            .first()
+        )
 
 
 def test_promote_creates_dataset_case_candidate_and_implicit_rating(sqlite_engine) -> None:
@@ -384,9 +380,7 @@ def _enable_autolock(monkeypatch: pytest.MonkeyPatch, judge: _StubJudge) -> None
 def _seed_dataset(name: str = "triage") -> None:
     factory = session_factory()
     with factory() as session:
-        session.add(
-            DatasetRow(name=name, version="v1", scorer="llm_judge", scorer_config={})
-        )
+        session.add(DatasetRow(name=name, version="v1", scorer="llm_judge", scorer_config={}))
         session.commit()
 
 
@@ -455,9 +449,7 @@ def test_autolock_ignores_unrated_and_inferred_positives(sqlite_engine, monkeypa
         assert derived[0].label == "new_request"
 
 
-def test_overturned_spot_check_unlocks_case_and_disables_lane(
-    sqlite_engine, monkeypatch
-) -> None:
+def test_overturned_spot_check_unlocks_case_and_disables_lane(sqlite_engine, monkeypatch) -> None:
     judge = _StubJudge(score=0.9, passed=True)
     _enable_autolock(monkeypatch, judge)
     monkeypatch.setattr(telemetry_service, "_MIN_SPOT_CHECKS_FOR_DISABLE", 1)
@@ -496,9 +488,7 @@ def test_overturned_spot_check_unlocks_case_and_disables_lane(
 def test_stats_aggregates_by_day_source_and_model(sqlite_engine) -> None:
     factory = session_factory()
     with factory() as session:
-        telemetry_service.ingest_items(
-            session, [_structured_item("s-1"), _transcript_item("t-1")]
-        )
+        telemetry_service.ingest_items(session, [_structured_item("s-1"), _transcript_item("t-1")])
         session.commit()
     _derive(adapters={"anthropic": _StubClassifierAdapter()})
 
