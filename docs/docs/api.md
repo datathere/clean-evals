@@ -27,9 +27,15 @@ versions may break the public API with a `CHANGELOG.md` entry.
 
 ::: clean_evals.Runner
 
+## Telemetry envelopes
+
+::: clean_evals.StructuredInteraction
+::: clean_evals.TranscriptInteraction
+
 ## Plugin protocols
 
 ::: clean_evals.Scorer
 ::: clean_evals.ModelAdapter
 ::: clean_evals.Reporter
 ::: clean_evals.Scrubber
+::: clean_evals.TelemetryScrubber

@@ -29,6 +29,10 @@ major. Pre-1.0, minor versions may break the public API with a
 | `clean_evals.ModelAdapter`          | stable |
 | `clean_evals.Reporter`              | stable |
 | `clean_evals.Scrubber`              | stable |
+| `clean_evals.TelemetryScrubber`     | beta   |
+| `clean_evals.TelemetryInteraction`  | beta   |
+| `clean_evals.StructuredInteraction` | beta   |
+| `clean_evals.TranscriptInteraction` | beta   |
 | `clean_evals.runner.Runner.run`     | stable |
 | `clean_evals.runner.Runner.run_sync`| stable |
 | `clean_evals.Dataset.from_yaml`     | stable |
@@ -58,3 +62,13 @@ Anything in `clean_evals._internal` may be removed at any time.
 - Adding new optional `RunConfig` fields with defaults.
 - Adding new `clean_evals.errors.*` exception types that don't replace
   existing ones.
+
+## Note on `ModelAdapter.complete(history=...)`
+
+0.3 adds an optional keyword-only `history` parameter to the
+`ModelAdapter` protocol (prior chat turns for `request_shape="chat"`
+datasets). The runner passes it only when a case actually has history, so
+adapters written against the earlier signature keep working for every
+single-shot dataset — they fail only the chat cases they cannot replay.
+Statically, implementations must add the parameter to satisfy the
+protocol; this is the documented pre-1.0 minor ratchet.

@@ -41,6 +41,32 @@ ports bind to `127.0.0.1`, so the services are reachable only from the
 machine running them. The bundled database and Redis credentials are
 development defaults; do not expose these services to a network.
 
+## Telemetry ingest and network exposure
+
+The telemetry endpoint (`POST /api/v1/telemetry/interactions`) is the one
+route designed to be reached by another application, and the one place
+clean-evals has authentication: a bearer token from
+`CLEAN_EVALS_INGEST_TOKEN`, without which the route answers 404. Read
+this carefully before wiring it up:
+
+- **The token protects that route only.** Every other endpoint remains
+  unauthenticated. An instance reachable by your production application
+  is an instance whose datasets anyone on that network path can read and
+  edit, and whose runs they can trigger.
+- The safe shape is a reverse proxy that terminates TLS and forwards
+  **only** `/api/v1/telemetry/interactions` to clean-evals; the UI and the
+  rest of the API stay reachable from localhost (or your private admin
+  network) only.
+- When the producing application runs on the same host, none of this is
+  needed — point it at `127.0.0.1` and keep the default binds.
+- Prefer batching envelopes and shipping them periodically over calling
+  per interaction; the endpoint is idempotent per
+  `(source, interaction_id)`, so retries are safe.
+
+Telemetry tables have no retention: envelopes and derived exchanges are
+kept until you delete them, and they contain whatever your application
+sent (see [Production data and PII](pii.md)).
+
 ## Artifacts
 
 Rendered reports are written to `./clean-evals-data/artifacts/`. Set

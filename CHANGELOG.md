@@ -7,7 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+- **Telemetry ingestion** (docs: `guides/telemetry.md`). Production
+  interactions enter through a token-gated batch endpoint
+  (`POST /api/v1/telemetry/interactions`; the route answers 404 until
+  `CLEAN_EVALS_INGEST_TOKEN` is set) or a JSONL upload, are stored
+  losslessly, and derive into reviewable exchanges. Two envelope kinds:
+  `structured` (accept-or-edit: edit ratio → implicit 1–5 rating, field
+  diffs → feedback, committed output → proposed golden answer) and
+  `transcript` (whole conversations exploded into per-turn exchanges; the
+  next user message is classified as the review of the previous response
+  by one small-model call per transcript, metered by
+  `CLEAN_EVALS_TELEMETRY_DAILY_COST_LIMIT_USD`). Missing accept signals
+  derive as unrated, never guessed.
+- **Telemetry inbox and monitoring pages.** Reviewing a derived exchange
+  promotes it — case, candidate outputs (including discarded
+  regenerations), implicit rating (`ratings.source="implicit"`) — or
+  discards it. Monitoring charts acceptance rate, mean implicit rating,
+  corrections per turn, and turns-to-accept per source and model, with
+  optional judge-scored sampling (off by default;
+  `CLEAN_EVALS_TELEMETRY_JUDGE_SAMPLE_RATE`).
+- **Auto-lock lane (opt-in, self-measuring).** With
+  `CLEAN_EVALS_TELEMETRY_AUTOLOCK=1`, an exchange with an explicit accept,
+  implicit rating ≥ 4, and a calibrated judge (kappa ≥ 0.6) that passes
+  the response is promoted and locked without review; a spot-check sample
+  routes to a human anyway, and the lane disables itself when the
+  overturn rate crosses a threshold.
+- **`request_shape: "chat"`.** Cases promoted from transcripts carry their
+  conversation prefix and eval runs replay it verbatim as message history.
+  The `ModelAdapter` protocol gains an optional keyword-only `history`
+  parameter, implemented by all five built-in adapters; the runner passes
+  it only when a case has history, so pre-chat adapters keep working for
+  single-shot datasets (see `API.md`).
+- **`TelemetryScrubber` protocol** (entry-point group
+  `clean_evals.telemetry_scrubbers`, selected via
+  `CLEAN_EVALS_TELEMETRY_SCRUBBER`) runs on every envelope before it is
+  persisted; without one, envelopes are stored raw and the UI says so.
+- Sample envelopes of both kinds in `examples/telemetry/`.
+
+### Fixed
+- A case whose request cannot be assembled (missing template field,
+  malformed chat context) now fails alone with `status="error"` instead of
+  crashing the run.
 
 ## [0.2.0] - 2026-07-02
 

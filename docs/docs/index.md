@@ -28,6 +28,11 @@ evaluation data stored in your own environment.
    the [comparison math](concepts/recommendations.md), plus per-case
    heatmaps and cost projections.
 
+4. **[Telemetry](guides/telemetry.md)** — ingest production interactions
+   (the request, the response, and what the user did next); each derives
+   into a pre-rated candidate case for the golden dataset, and the same
+   signals feed per-model quality monitoring over time.
+
 ![A completed eval run: leaderboard and model recommendations](assets/decision-ui.png)
 
 ## Quick start

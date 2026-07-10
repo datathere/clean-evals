@@ -90,6 +90,7 @@ by side, and lets you pick or edit the best one. Locked cases become
 ## What's next
 
 - [Concepts: how the recommendations are computed](concepts/recommendations.md)
+- [Telemetry: production data into the golden path](guides/telemetry.md)
 - [Writing a custom scorer](guides/writing-a-scorer.md)
 - [Running clean-evals against production data (PII)](guides/pii.md)
 - [Deployment](guides/deployment.md)

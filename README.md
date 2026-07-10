@@ -33,6 +33,11 @@ Capabilities:
    and three model recommendations side by side — maximum accuracy, best
    price/performance, and lowest cost — with the underlying math visible,
    plus cost projections.
+4. **Telemetry.** Feed real production interactions in — the request, the
+   response, and what the user did next (edited fields, asked for changes,
+   regenerated, accepted). Each interaction derives into a pre-rated
+   candidate case for the golden dataset, and the same signals feed
+   per-model quality monitoring over time.
 
 ![A completed eval run: leaderboard and model recommendations](docs/assets/decision-ui.png)
 
@@ -58,6 +63,43 @@ Results drill down from the leaderboard to a per-case heatmap and to the
 failing cases themselves, with the expected and actual answers side by side:
 
 ![Eval results: per-case heatmap and failed cases with expected and actual answers](docs/assets/eval-results.png)
+
+## Telemetry: production data into the golden path
+
+Your users already review model outputs every day — they edit fields, ask
+for something shorter, hit regenerate, or accept. Telemetry ingestion
+turns those interactions into dataset material and monitoring signal:
+
+- **Two kinds of envelope.** `structured` records a request, a response,
+  and the user's field edits or accept — derivation is deterministic and
+  free (edit ratio → an implicit 1–5 rating, diffs → feedback, the
+  committed output → the proposed golden answer). `transcript` records a
+  whole conversation; it is split into per-turn exchanges where the next
+  user message is treated as the review of the previous response, labelled
+  by one small-model classifier call per transcript.
+- **Two ways in.** A token-gated batch endpoint
+  (`POST /api/v1/telemetry/interactions` — dark until
+  `CLEAN_EVALS_INGEST_TOKEN` is set) or a JSONL upload in the UI. Working
+  samples live in [`examples/telemetry/`](examples/telemetry/).
+- **A human confirms.** Derived exchanges land in a review inbox;
+  promotion creates a case, candidate outputs (including discarded
+  regenerations), and an implicit rating. An opt-in auto-lock lane
+  promotes without review only when an explicit accept, the implicit
+  rating, and a calibrated judge all concur — and it routes a sample to
+  spot-checks and disables itself when the human overturn rate climbs.
+- **Conversations replay faithfully.** Promoted transcript cases carry
+  their prior turns; eval runs send them verbatim as message history
+  (`request_shape: "chat"`), not flattened into a text blob.
+- **Monitoring.** Acceptance rate, mean implicit rating, corrections per
+  turn, and turns-to-accept, per source and model over time.
+
+![Telemetry monitoring: per-source acceptance and per-model quality over time](docs/assets/telemetry-monitoring.png)
+
+Telemetry is production data: envelopes are stored raw unless you
+configure a `TelemetryScrubber`, and the ingest token protects the ingest
+route only — see the
+[Telemetry guide](docs/docs/guides/telemetry.md) and
+[Disclaimers](#disclaimers).
 
 ## Getting started
 
@@ -141,8 +183,15 @@ Read these before relying on clean-evals for anything that matters.
   to the third-party APIs of the models you select, subject to those
   providers' data-handling terms.
 - **PII is not scrubbed automatically.** The optional `Scrubber` hook applies
-  only to datasets loaded from YAML. Anything uploaded through the web UI is
-  stored as-is. You are responsible for scrubbing your own data.
+  only to datasets loaded from YAML, and the optional `TelemetryScrubber`
+  only when you configure one. Anything uploaded through the web UI — and
+  any telemetry envelope ingested without a scrubber — is stored as-is. You
+  are responsible for scrubbing your own data.
+- **The telemetry ingest token protects one route.** Setting
+  `CLEAN_EVALS_INGEST_TOKEN` authenticates
+  `POST /api/v1/telemetry/interactions` and nothing else. Making that route
+  reachable by your production application does not make the rest of the
+  instance safe to expose; forward only that path through your proxy.
 - **Data is stored in plain text on disk.** Prompts, model outputs, datasets,
   and rendered reports live unencrypted under `./clean-evals-data/` (and your
   configured database). Treat that directory as sensitive, and note there is
@@ -233,6 +282,7 @@ browse the sources below; build locally with `mkdocs serve`):
 - [Writing an Adapter](docs/docs/guides/writing-an-adapter.md)
 - [Writing a Reporter](docs/docs/guides/writing-a-reporter.md)
 - [Dataset Builder](docs/docs/guides/dataset-builder.md)
+- [Telemetry](docs/docs/guides/telemetry.md)
 - [Running clean-evals](docs/docs/guides/deployment.md)
 - [Brand Policy](BRANDING.md)
 

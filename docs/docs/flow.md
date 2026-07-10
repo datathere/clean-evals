@@ -61,6 +61,14 @@ only the variables:
    distinguished, next to the parsed case table. Models receive the request
    as shown.
 
+**Path C: "My users already did the reviewing."**
+Production interactions — with the user's edits, follow-up corrections,
+regenerations, and accepts attached — can be ingested directly as
+[telemetry](guides/telemetry.md). Each interaction derives into a
+pre-rated candidate case: stage 1 *and* a first pass of stage 3, mined
+from real traffic. Conversations become `chat`-shaped cases whose prior
+turns replay verbatim during eval runs.
+
 Requests are assembled the way providers expect them: the system prompt is
 sent in the **system role**; context and variables are rendered into the
 **user message** through a visible, editable template that defaults to:
