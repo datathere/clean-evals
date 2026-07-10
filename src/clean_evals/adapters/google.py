@@ -7,6 +7,7 @@ out of URLs, which end up in exception messages, logs, and stored errors.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any, ClassVar, Literal
 
 import httpx
@@ -19,6 +20,7 @@ from clean_evals.adapters._base import (
 )
 from clean_evals.models import ModelResponse
 from clean_evals.pricing import compute_cost
+from clean_evals.prompting import ChatMessage
 
 _API_URL_TEMPLATE = (
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -56,6 +58,7 @@ class GoogleAdapter:
         system: str | None = None,
         reasoning_effort: str | None = None,  # noqa: ARG002 — not exposed by this API
         max_output_tokens: int | None = None,
+        history: Sequence[ChatMessage] | None = None,
     ) -> ModelResponse:
         reject_floating_alias(model)
         api_key = self._api_key or env_or_raise("GOOGLE_API_KEY")
@@ -67,8 +70,17 @@ class GoogleAdapter:
         if response_format == "json":
             generation_config["responseMimeType"] = "application/json"
 
+        # Gemini's assistant role is "model".
+        contents: list[dict[str, Any]] = [
+            {
+                "role": "model" if turn["role"] == "assistant" else "user",
+                "parts": [{"text": turn["content"]}],
+            }
+            for turn in history or ()
+        ]
+        contents.append({"role": "user", "parts": [{"text": prompt}]})
         payload: dict[str, Any] = {
-            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "contents": contents,
             "generationConfig": generation_config,
         }
         if system:

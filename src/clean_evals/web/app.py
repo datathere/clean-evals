@@ -11,6 +11,8 @@ Routes:
 - ``/api/v1/events`` — SSE stream of live run progress.
 - ``/api/v1/builder/upload`` — multi-format input upload (CSV/JSON/JSONL/YAML).
 - ``/api/v1/runs/{id}/artifacts/{name}`` — fetch a stored artifact.
+- ``/api/v1/telemetry/*`` — telemetry ingest (token-gated), inbox,
+  promotion, spot checks, and monitoring stats.
 
 Static frontend mounted at ``/`` (with a catch-all so the React router
 owns deep links).
@@ -28,7 +30,16 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from clean_evals._internal.version import __version__
-from clean_evals.web.api import builder, datasets, events, goldenpath, models, runs, schedules
+from clean_evals.web.api import (
+    builder,
+    datasets,
+    events,
+    goldenpath,
+    models,
+    runs,
+    schedules,
+    telemetry,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -61,6 +72,7 @@ app.include_router(schedules.router, prefix="/api/v1")
 app.include_router(events.router, prefix="/api/v1")
 app.include_router(builder.router, prefix="/api/v1")
 app.include_router(models.router, prefix="/api/v1")
+app.include_router(telemetry.router, prefix="/api/v1")
 
 
 @app.get("/api/v1/health", tags=["health"])

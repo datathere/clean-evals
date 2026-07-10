@@ -102,8 +102,9 @@ class Dataset(_StrictModel):
     scorer: str
     scorer_config: dict[str, Any] = Field(default_factory=dict)
     # Prompt spec (docs/docs/flow.md, stage 1). "raw" sends each case
-    # verbatim; "templated" assembles system prompt + context + variables.
-    request_shape: Literal["raw", "templated"] = "raw"
+    # verbatim; "templated" assembles system prompt + context + variables;
+    # "chat" replays each case's prior turns as message history.
+    request_shape: Literal["raw", "templated", "chat"] = "raw"
     system_prompt: str | None = None
     shared_context: str | None = None
     user_template: str | None = None

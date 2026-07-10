@@ -7,6 +7,7 @@ Uses ``/v1/chat/completions`` with ``OPENAI_API_KEY``. Supports
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from typing import Any, ClassVar, Literal
 
 import httpx
@@ -21,6 +22,7 @@ from clean_evals.capabilities import capabilities
 from clean_evals.errors import ProviderError
 from clean_evals.models import ModelResponse
 from clean_evals.pricing import compute_cost
+from clean_evals.prompting import ChatMessage
 
 _log = logging.getLogger(__name__)
 
@@ -58,6 +60,7 @@ class OpenAIAdapter:
         system: str | None = None,
         reasoning_effort: str | None = None,
         max_output_tokens: int | None = None,
+        history: Sequence[ChatMessage] | None = None,
     ) -> ModelResponse:
         reject_floating_alias(model)
         api_key = self._api_key or env_or_raise("OPENAI_API_KEY")
@@ -65,6 +68,8 @@ class OpenAIAdapter:
         messages: list[dict[str, str]] = []
         if system:
             messages.append({"role": "system", "content": system})
+        for turn in history or ():
+            messages.append({"role": turn["role"], "content": turn["content"]})
         messages.append({"role": "user", "content": prompt})
         payload: dict[str, Any] = {
             "model": model,

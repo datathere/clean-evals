@@ -26,7 +26,7 @@ class DatasetOut(_Out):
     locked_count: int = 0
     has_runs: bool = False
     scorer_config: dict[str, Any] = Field(default_factory=dict)
-    request_shape: Literal["raw", "templated"] = "raw"
+    request_shape: Literal["raw", "templated", "chat"] = "raw"
     system_prompt: str | None = None
     shared_context: str | None = None
     user_template: str | None = None
@@ -152,7 +152,7 @@ class DatasetSettingsIn(BaseModel):
 
 class PromptSpecIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    request_shape: Literal["raw", "templated"]
+    request_shape: Literal["raw", "templated", "chat"]
     system_prompt: str | None = None
     shared_context: str | None = None
     user_template: str | None = None
@@ -317,3 +317,119 @@ class TriggerRunIn(BaseModel):
     dataset_id: int
     config: dict[str, Any]
     mode: Literal["inline", "queue"] = "inline"
+
+
+# ---------------------------------------------------------------------------
+# Telemetry: ingest, inbox, promotion, monitoring
+# ---------------------------------------------------------------------------
+
+
+class TelemetryRejectionOut(_Out):
+    index: int
+    error: str
+
+
+class TelemetryIngestOut(_Out):
+    accepted: int
+    duplicates: list[str]
+    rejected: list[TelemetryRejectionOut]
+    scrubber: str | None  # entry-point name, or null = envelopes stored raw
+
+
+class TelemetryExchangeOut(_Out):
+    id: int
+    interaction_id: str
+    source: str
+    dataset: str
+    kind: str
+    occurred_at: datetime
+    outcome: str | None
+    turn_index: int
+    context: list[dict[str, str]]
+    request_text: str
+    request_input: dict[str, Any] | None
+    response_text: str
+    response_parsed: dict[str, Any] | None
+    response_model: str
+    alternatives: list[dict[str, Any]]
+    regen_count: int
+    label: str | None
+    verdict: str | None
+    rating: int | None
+    feedback: str | None
+    proposed_expected: dict[str, Any] | None
+    judge_score: float | None
+    status: str
+    promoted_case_id: int | None
+    auto_locked: bool
+    spot_check: bool
+    spot_check_resolved: str | None
+
+
+class TelemetryInboxOut(_Out):
+    total: int
+    exchanges: list[TelemetryExchangeOut]
+
+
+class TelemetryPromoteIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    lock: bool = False
+    expected: dict[str, Any] | None = None
+
+
+class TelemetryPromoteOut(_Out):
+    case_id: int
+    dataset_id: int
+
+
+class SpotCheckIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    resolution: Literal["confirmed", "overturned"]
+
+
+class TelemetryDeriveOut(_Out):
+    interactions: int
+    exchanges: int
+    auto_locked: int
+    classifier_cost_usd: float
+    skipped_budget: int
+    errors: int
+
+
+class TelemetrySeriesRow(_Out):
+    date: str
+    source: str
+    model: str
+    exchanges: int
+    positive: int
+    negative: int
+    incomplete: int
+    unrated: int
+    acceptance_rate: float
+    correction_rate: float
+    mean_rating: float | None
+    mean_regens: float
+    judge_scored: int
+    mean_judge_score: float | None
+
+
+class TelemetrySourceRow(_Out):
+    source: str
+    interactions: int
+    accept_rate: float
+    mean_turns_to_accept: float | None
+
+
+class TelemetryStatsOut(_Out):
+    days: int
+    series: list[TelemetrySeriesRow]
+    sources: list[TelemetrySourceRow]
+
+
+class AutolockStateOut(_Out):
+    enabled: bool
+    checked: int
+    overturned: int
+    overturn_rate: float
+    disable_threshold: float
+    self_disabled: bool

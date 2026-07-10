@@ -165,6 +165,7 @@ async def generate_candidates(
                     system=request.system,
                     reasoning_effort=params.reasoning_effort if params else None,
                     max_output_tokens=params.max_output_tokens if params else None,
+                    history=request.history,
                 )
             await cost.add(response.cost_usd)
             row.update(

@@ -306,7 +306,15 @@ class Runner:
             # Failure is data: a provider with no registered adapter fails
             # its own cases instead of crashing the run.
             return _failed_case(case.id, model, status="error", reason=str(exc))
-        request = self._assemble_request(case, dataset)
+        try:
+            request = self._assemble_request(case, dataset)
+        except (KeyError, ValueError) as exc:
+            # Failure is data: a case whose input cannot be assembled into a
+            # request (missing template field, malformed chat context) fails
+            # alone instead of crashing the run.
+            return _failed_case(
+                case.id, model, status="error", reason=f"request assembly failed: {exc}"
+            )
         started_at = now()
 
         response: ModelResponse | None = None
@@ -330,6 +338,7 @@ class Runner:
                     system=request.system,
                     reasoning_effort=params.reasoning_effort if params else None,
                     max_output_tokens=params.max_output_tokens if params else None,
+                    history=request.history,
                 )
                 break
             except RateLimited as exc:
@@ -442,7 +451,7 @@ class Runner:
         return infer_provider(model)
 
     def _assemble_request(self, case: Case, dataset: Dataset) -> AssembledRequest:
-        if dataset.request_shape == "templated":
+        if dataset.request_shape in ("templated", "chat"):
             return assemble(
                 request_shape=dataset.request_shape,
                 system_prompt=dataset.system_prompt,

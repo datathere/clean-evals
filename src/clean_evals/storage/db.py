@@ -10,6 +10,10 @@ Schema (portable across MySQL 8 and Postgres 16):
 - ``case_results`` — per ``(case, model)`` row, lightweight (no full raw
   body — that lives in the artifact store).
 - ``schedules`` — per-dataset cron, enable flag, last/next run timestamps.
+- ``telemetry_interactions`` — one raw ingested envelope per production
+  interaction, kept lossless so derivation is repeatable.
+- ``telemetry_exchanges`` — derived (request, response) data points with
+  implicit ratings; the unit the Telemetry inbox reviews and promotes.
 
 Indices live on the foreign keys plus ``(name, version)`` on ``datasets``
 and ``(dataset_id, status)`` on ``runs``.
@@ -154,6 +158,9 @@ class RatingRow(Base):
     )
     rating: Mapped[int] = mapped_column(Integer)  # 1..5
     feedback: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    # "human" for blind-review ratings, "implicit" for ratings derived from
+    # production telemetry. Calibration can weight or exclude by source.
+    source: Mapped[str] = mapped_column(String(20), default="human", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
@@ -282,6 +289,97 @@ class JobRow(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+
+class TelemetryInteractionRow(Base):
+    """One raw ingested telemetry envelope.
+
+    The envelope is stored verbatim (``envelope_jsonb``) so derivation is
+    lossless and repeatable: re-deriving after a classifier or heuristic
+    change never needs the producing application again. ``status`` tracks
+    the derivation lifecycle, not review — review state lives on the
+    exchanges.
+    """
+
+    __tablename__ = "telemetry_interactions"
+    __table_args__ = (
+        UniqueConstraint("source", "interaction_id", name="uq_telemetry_source_interaction"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    interaction_id: Mapped[str] = mapped_column(String(80))
+    source: Mapped[str] = mapped_column(String(100), index=True)
+    dataset_name: Mapped[str] = mapped_column(String(200), index=True)
+    kind: Mapped[str] = mapped_column(String(20))  # structured | transcript
+    model: Mapped[str] = mapped_column(String(120))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    outcome: Mapped[str | None] = mapped_column(String(20), nullable=True)  # accept|ended|None
+    envelope_jsonb: Mapped[dict[str, Any]] = mapped_column(JSON)
+    classifier_cost_usd: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), default="pending", index=True, nullable=False
+    )  # pending | derived | error
+    detail: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+    exchanges: Mapped[list[TelemetryExchangeRow]] = relationship(
+        "TelemetryExchangeRow", back_populates="interaction", cascade="all, delete-orphan"
+    )
+
+
+class TelemetryExchangeRow(Base):
+    """One derived (request, response) data point from a telemetry envelope.
+
+    A structured interaction derives exactly one exchange; a transcript
+    derives one per (user turn, assistant turn) pair, with all prior turns
+    as its context. This is the unit the Telemetry inbox lists, the human
+    reviews, and promotion turns into a case + candidate + implicit rating.
+    """
+
+    __tablename__ = "telemetry_exchanges"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    interaction_pk: Mapped[int] = mapped_column(
+        ForeignKey("telemetry_interactions.id", ondelete="CASCADE"), index=True
+    )
+    turn_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    input_hash: Mapped[str] = mapped_column(String(64), index=True)
+    context_jsonb: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)  # {"turns": [...]}
+    request_text: Mapped[str] = mapped_column(Text())
+    request_input_jsonb: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    response_text: Mapped[str] = mapped_column(Text())
+    response_parsed_jsonb: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    response_model: Mapped[str] = mapped_column(String(120), index=True)
+    alternatives_jsonb: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)  # {"items": []}
+    regen_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    label: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    verdict: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )  # positive | negative | incomplete | unrated
+    rating: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 1..5, implicit
+    feedback: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    proposed_expected_jsonb: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    judge_score: Mapped[float | None] = mapped_column(Float, nullable=True)  # 0..1
+    status: Mapped[str] = mapped_column(
+        String(20), default="derived", index=True, nullable=False
+    )  # derived | promoted | discarded
+    promoted_case_id: Mapped[int | None] = mapped_column(
+        ForeignKey("cases.id", ondelete="SET NULL"), nullable=True
+    )
+    auto_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    spot_check: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    spot_check_resolved: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )  # confirmed | overturned
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+    interaction: Mapped[TelemetryInteractionRow] = relationship(
+        "TelemetryInteractionRow", back_populates="exchanges"
     )
 
 

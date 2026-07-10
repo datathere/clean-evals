@@ -10,6 +10,7 @@ backend OpenRouter brokers.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any, ClassVar, Literal
 
 import httpx
@@ -20,6 +21,7 @@ from clean_evals.adapters._base import (
     post_json,
 )
 from clean_evals.models import ModelResponse
+from clean_evals.prompting import ChatMessage
 
 _API_URL = "https://openrouter.ai/api/v1/chat/completions"
 _DEFAULT_REFERER = "https://github.com/datathere/clean-evals"
@@ -61,6 +63,7 @@ class OpenRouterAdapter:
         system: str | None = None,
         reasoning_effort: str | None = None,
         max_output_tokens: int | None = None,
+        history: Sequence[ChatMessage] | None = None,
     ) -> ModelResponse:
         # OpenRouter passes the model id straight through to the upstream
         # provider. We don't reject "-latest" here because OpenRouter
@@ -71,6 +74,8 @@ class OpenRouterAdapter:
         messages: list[dict[str, str]] = []
         if system:
             messages.append({"role": "system", "content": system})
+        for turn in history or ():
+            messages.append({"role": turn["role"], "content": turn["content"]})
         messages.append({"role": "user", "content": prompt})
         payload: dict[str, Any] = {
             "model": model,

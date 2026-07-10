@@ -35,8 +35,14 @@ from clean_evals.protocols import (
     Reporter,
     Scorer,
     Scrubber,
+    TelemetryScrubber,
 )
 from clean_evals.runner import Runner
+from clean_evals.telemetry import (
+    StructuredInteraction,
+    TelemetryInteraction,
+    TranscriptInteraction,
+)
 
 __all__ = [
     "Case",
@@ -52,5 +58,9 @@ __all__ = [
     "ScoreResult",
     "Scorer",
     "Scrubber",
+    "StructuredInteraction",
+    "TelemetryInteraction",
+    "TelemetryScrubber",
+    "TranscriptInteraction",
     "__version__",
 ]

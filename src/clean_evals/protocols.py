@@ -1,15 +1,17 @@
 """Plugin extension protocols.
 
-Three extension points: ``Scorer``, ``ModelAdapter``, ``Reporter``. A fourth,
-``Scrubber``, is used at the dataset-loader boundary.
+Three extension points: ``Scorer``, ``ModelAdapter``, ``Reporter``. Two
+scrubbing protocols guard data boundaries: ``Scrubber`` at the dataset
+loader, ``TelemetryScrubber`` at telemetry ingest.
 
-All four are runtime-checkable :class:`typing.Protocol` types — implementations
+All are runtime-checkable :class:`typing.Protocol` types — implementations
 do not need to inherit. Registration happens via Python entry points, see
 ``pyproject.toml`` ``[project.entry-points."clean_evals.*"]`` blocks.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Protocol, runtime_checkable
 
@@ -20,6 +22,8 @@ if TYPE_CHECKING:
         RunResult,
         ScoreResult,
     )
+    from clean_evals.prompting import ChatMessage
+    from clean_evals.telemetry import StructuredInteraction, TranscriptInteraction
 
 
 @runtime_checkable
@@ -75,6 +79,7 @@ class ModelAdapter(Protocol):
         system: str | None = None,
         reasoning_effort: str | None = None,
         max_output_tokens: int | None = None,
+        history: Sequence[ChatMessage] | None = None,
     ) -> ModelResponse: ...
 
 
@@ -101,3 +106,21 @@ class Scrubber(Protocol):
     """
 
     def scrub(self, case: Case) -> Case: ...
+
+
+@runtime_checkable
+class TelemetryScrubber(Protocol):
+    """Optional plugin for cleaning PII from telemetry envelopes at ingest.
+
+    Selected via ``CLEAN_EVALS_TELEMETRY_SCRUBBER`` naming an entry point in
+    the ``clean_evals.telemetry_scrubbers`` group; called once per envelope
+    *before* anything is persisted. Telemetry is production data by
+    definition — when no scrubber is configured, envelopes are stored raw,
+    and the docs and Telemetry inbox say so plainly.
+
+    Implementations must be pure — same input, same output.
+    """
+
+    def scrub_interaction(
+        self, interaction: StructuredInteraction | TranscriptInteraction
+    ) -> StructuredInteraction | TranscriptInteraction: ...

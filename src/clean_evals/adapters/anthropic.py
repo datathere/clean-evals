@@ -11,6 +11,7 @@ how each prompt is shaped.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from typing import Any, ClassVar, Literal
 
 import httpx
@@ -25,6 +26,7 @@ from clean_evals.capabilities import capabilities
 from clean_evals.errors import ProviderError
 from clean_evals.models import ModelResponse
 from clean_evals.pricing import compute_cost
+from clean_evals.prompting import ChatMessage
 
 _log = logging.getLogger(__name__)
 
@@ -66,6 +68,7 @@ class AnthropicAdapter:
         system: str | None = None,
         reasoning_effort: str | None = None,  # noqa: ARG002 — not exposed by this API
         max_output_tokens: int | None = None,
+        history: Sequence[ChatMessage] | None = None,
     ) -> ModelResponse:
         reject_floating_alias(model)
         api_key = self._api_key or env_or_raise("ANTHROPIC_API_KEY")
@@ -82,10 +85,14 @@ class AnthropicAdapter:
                 "or include any prose. Top-level value must be an object."
             )
 
+        messages: list[dict[str, Any]] = [
+            {"role": turn["role"], "content": turn["content"]} for turn in history or ()
+        ]
+        messages.append({"role": "user", "content": prompt})
         payload: dict[str, Any] = {
             "model": model,
             "max_tokens": max_output_tokens or 4096,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages,
         }
         if capabilities(self.provider, model).supports_temperature:
             payload["temperature"] = temperature
